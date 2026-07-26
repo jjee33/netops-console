@@ -190,6 +190,17 @@ jobs:
             echo "nmap, ping and traceroute all ran as uid $(id -u)"
           '
 
+      - name: A SYN scan really works unprivileged
+        run: |
+          set -euo pipefail
+          # This is the check that actually proves raw sockets, and the one the
+          # three commands above do NOT prove: `nmap -sn` on loopback degrades
+          # to a TCP connect scan, ping uses an ICMP datagram socket because
+          # Docker sets net.ipv4.ping_group_range permissively, and traceroute
+          # defaults to UDP probes. All three pass with no raw socket at all.
+          docker run --rm --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
+            nmap -sS -p 22 -Pn --host-timeout 10s 127.0.0.1
+
       - name: no-new-privileges strips file capabilities (documenting the trap)
         run: |
           set -euo pipefail
@@ -204,15 +215,11 @@ jobs:
           # an ICMP datagram socket because Docker sets net.ipv4.ping_group_range
           # wide open by default. Both succeed with or without CAP_NET_RAW.
           # A SYN scan cannot degrade — nmap either gets a raw socket or errors.
-          probe='nmap -sS -p 22 -Pn --host-timeout 10s 127.0.0.1'
-
-          echo "--- without no-new-privileges (expected: succeeds) ---"
-          docker run --rm --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
-            $probe
+          probe=(nmap -sS -p 22 -Pn --host-timeout 10s 127.0.0.1)
 
           echo "--- with no-new-privileges (expected: fails) ---"
           if docker run --rm --security-opt no-new-privileges:true \
-               --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci $probe; then
+               --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci "${probe[@]}"; then
             echo "::error::a SYN scan still worked under no-new-privileges."
             echo "::error::The warning in compose.yaml is wrong — correct it."
             exit 1

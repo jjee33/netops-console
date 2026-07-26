@@ -58,6 +58,17 @@ ENV PYTHONUNBUFFERED=1 \
     NETOPS_DB_PATH=/data/netops.db \
     NETOPS_WORKERS=1
 
+# nmap decides whether it may use raw sockets by checking geteuid(), not by
+# checking its own capabilities. Running non-root with cap_net_raw, it refuses
+# SYN and ARP scans with "you requested a scan type which requires root
+# privileges" even though the syscalls themselves would succeed — so file
+# capabilities alone are necessary but still not sufficient for real discovery.
+#
+# NMAP_PRIVILEGED is nmap's supported way to say "assume privilege and let the
+# kernel arbitrate". It grants nothing: if the capability is genuinely absent,
+# the raw socket calls still fail with EPERM.
+ENV NMAP_PRIVILEGED=1
+
 # Network tooling. libcap2-bin is deliberately RETAINED rather than purged after
 # setcap: `getcap` is how an operator verifies the capability plumbing actually
 # worked (it is a release-gate check), and keeping `setcap` costs nothing in

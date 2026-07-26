@@ -115,9 +115,9 @@ RUN set -eux; \
 # `getcap /usr/bin/traceroute` prints nothing because Debian ships it behind an
 # alternatives symlink and capabilities live on the target, not the link. This
 # wrapper makes the operator-facing check work on the path people actually type.
-# hadolint ignore=SC2016
 # The single quotes are the point — this is script text being written to a
 # file, not shell to expand at build time.
+# hadolint ignore=SC2016
 RUN printf '%s\n' \
       '#!/bin/sh' \
       '# Report file capabilities, resolving symlinks first.' \

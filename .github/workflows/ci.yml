@@ -198,21 +198,26 @@ jobs:
           # sockets, because no_new_privs makes the kernel ignore file
           # capabilities at execve.
           #
-          # ping is the probe, not nmap: `nmap -sn` against loopback silently
-          # falls back to a TCP connect scan and succeeds either way, so it
-          # cannot tell the two configurations apart.
-          echo "--- with no-new-privileges (expected to fail) ---"
+          # The probe has to be an operation with no unprivileged fallback.
+          # Two obvious candidates are useless here: `nmap -sn` against
+          # loopback quietly degrades to a TCP connect scan, and `ping` uses
+          # an ICMP datagram socket because Docker sets net.ipv4.ping_group_range
+          # wide open by default. Both succeed with or without CAP_NET_RAW.
+          # A SYN scan cannot degrade — nmap either gets a raw socket or errors.
+          probe='nmap -sS -p 22 -Pn --host-timeout 10s 127.0.0.1'
+
+          echo "--- without no-new-privileges (expected: succeeds) ---"
+          docker run --rm --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
+            $probe
+
+          echo "--- with no-new-privileges (expected: fails) ---"
           if docker run --rm --security-opt no-new-privileges:true \
-               --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
-               ping -c1 -W2 127.0.0.1; then
-            echo "::error::ping still worked under no-new-privileges — the"
-            echo "::error::compose.yaml comment is wrong and must be corrected"
+               --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci $probe; then
+            echo "::error::a SYN scan still worked under no-new-privileges."
+            echo "::error::The warning in compose.yaml is wrong — correct it."
             exit 1
           fi
-          echo "--- without it (expected to succeed) ---"
-          docker run --rm --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
-            ping -c1 -W2 127.0.0.1
-          echo "confirmed: no-new-privileges is what breaks raw sockets here"
+          echo "confirmed: no-new-privileges disables the file capability"
 
       - name: First run on a fresh volume
         run: |

@@ -190,18 +190,29 @@ jobs:
             echo "nmap, ping and traceroute all ran as uid $(id -u)"
           '
 
-      - name: no-new-privileges breaks file capabilities (documenting the trap)
+      - name: no-new-privileges strips file capabilities (documenting the trap)
         run: |
           set -euo pipefail
-          # Asserts the compose comment is true: this is why the published
-          # compose.yaml must not set security_opt: no-new-privileges.
+          # Why this matters: adding security_opt: no-new-privileges to
+          # compose.yaml looks like free hardening and instead disables raw
+          # sockets, because no_new_privs makes the kernel ignore file
+          # capabilities at execve.
+          #
+          # ping is the probe, not nmap: `nmap -sn` against loopback silently
+          # falls back to a TCP connect scan and succeeds either way, so it
+          # cannot tell the two configurations apart.
+          echo "--- with no-new-privileges (expected to fail) ---"
           if docker run --rm --security-opt no-new-privileges:true \
                --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
-               nmap -sn 127.0.0.1/32 > /dev/null 2>&1; then
-            echo "::notice::nmap still worked under no-new-privileges; re-check the compose comment"
-          else
-            echo "confirmed: no-new-privileges strips file capabilities as documented"
+               ping -c1 -W2 127.0.0.1; then
+            echo "::error::ping still worked under no-new-privileges — the"
+            echo "::error::compose.yaml comment is wrong and must be corrected"
+            exit 1
           fi
+          echo "--- without it (expected to succeed) ---"
+          docker run --rm --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
+            ping -c1 -W2 127.0.0.1
+          echo "confirmed: no-new-privileges is what breaks raw sockets here"
 
       - name: First run on a fresh volume
         run: |
@@ -261,8 +272,13 @@ jobs:
         run: |
           set -euo pipefail
           body=$(curl -fsS http://127.0.0.1:8000/healthz)
-          headers=$(curl -fsSI http://127.0.0.1:8000/healthz)
+          # Headers from a GET, not a HEAD: this is what a browser or proxy
+          # actually receives.
+          headers=$(curl -fsS -D - -o /dev/null http://127.0.0.1:8000/healthz)
           echo "$headers"
+          # Monitors default to HEAD; answering 405 there reads as an outage.
+          curl -fsSI -o /dev/null http://127.0.0.1:8000/healthz \
+            || { echo "::error::HEAD /healthz is not supported"; exit 1; }
           [ -z "$body" ] || { echo "::error::/healthz returned a body: $body"; exit 1; }
           # `if` rather than `grep && exit`: under `set -e` a non-matching grep
           # would end the step with a failure, which is the passing case here.

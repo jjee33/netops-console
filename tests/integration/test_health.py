@@ -37,6 +37,13 @@ async def test_healthz_does_not_leak_version_or_build_info(client: httpx.AsyncCl
     assert "netops" not in combined.lower()
 
 
+async def test_healthz_accepts_head(client: httpx.AsyncClient) -> None:
+    """Uptime monitors commonly default to HEAD; a 405 there reads as an outage."""
+    async with client:
+        response = await client.head("/healthz")
+    assert response.status_code == 200
+
+
 @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
 async def test_api_documentation_endpoints_are_disabled(
     client: httpx.AsyncClient, path: str

@@ -44,13 +44,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    @app.get("/healthz", include_in_schema=False)
+    @app.api_route("/healthz", methods=["GET", "HEAD"], include_in_schema=False)
     async def healthz() -> Response:
         """Liveness probe.
 
         Returns 200 and nothing else. No version, no build info, no database
         state — this is the one endpoint reachable without authentication, so
         it must not be usable for fingerprinting.
+
+        HEAD is accepted alongside GET because uptime monitors commonly default
+        to it, and answering 405 there looks like an outage.
         """
         return Response(status_code=200)
 

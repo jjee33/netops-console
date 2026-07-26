@@ -69,7 +69,7 @@ These are worth running once. Each has a silent failure mode.
 
 | Check | Command | Expected |
 |---|---|---|
-| File capabilities | `docker compose exec app getcap /usr/bin/nmap` | `cap_net_raw=ep` |
+| File capabilities | `docker compose exec app netops-getcap /usr/bin/nmap /usr/bin/ping /usr/bin/traceroute` | `cap_net_raw=ep` on all three |
 | Unprivileged scan | `docker compose exec app nmap -sn 192.168.1.0/24` | Hosts found, MAC addresses populated |
 | Running non-root | `docker compose exec app id -u` | `10001` |
 | Not LAN-exposed | `ss -ltn \| grep 8000` | `127.0.0.1:8000`, never `0.0.0.0:8000` |

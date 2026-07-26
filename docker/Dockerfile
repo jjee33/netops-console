@@ -102,13 +102,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # firewall. CAP_NET_RAW alone covers everything this app needs — SYN scans,
 # ARP-based host discovery, MAC and vendor resolution, ping, and traceroute.
 # ---------------------------------------------------------------------------
+# pipefail so the verification greps below cannot pass on a failed getcap.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 RUN set -eux; \
-    setcap cap_net_raw+ep "$(readlink -f /usr/bin/nmap)"; \
-    setcap cap_net_raw+ep "$(readlink -f /usr/bin/ping)"; \
-    setcap cap_net_raw+ep "$(readlink -f /usr/bin/traceroute)"; \
-    getcap "$(readlink -f /usr/bin/nmap)" | grep -q cap_net_raw; \
-    getcap "$(readlink -f /usr/bin/ping)" | grep -q cap_net_raw; \
-    getcap "$(readlink -f /usr/bin/traceroute)" | grep -q cap_net_raw
+    for tool in nmap ping traceroute; do \
+      target="$(readlink -f "/usr/bin/$tool")"; \
+      setcap cap_net_raw+ep "$target"; \
+      getcap "$target" | grep -q cap_net_raw; \
+    done
+
+# `getcap /usr/bin/traceroute` prints nothing because Debian ships it behind an
+# alternatives symlink and capabilities live on the target, not the link. This
+# wrapper makes the operator-facing check work on the path people actually type.
+RUN printf '%s\n' \
+      '#!/bin/sh' \
+      '# Report file capabilities, resolving symlinks first.' \
+      'for f in "$@"; do /sbin/getcap "$(readlink -f "$f")"; done' \
+    > /usr/local/bin/netops-getcap \
+ && chmod 0755 /usr/local/bin/netops-getcap
+
+SHELL ["/bin/sh", "-c"]
 
 # ---------------------------------------------------------------------------
 # Non-root user. /data must be created AND chowned in the image: a fresh named

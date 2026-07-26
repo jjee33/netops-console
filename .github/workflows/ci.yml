@@ -151,7 +151,10 @@ jobs:
       - name: File capabilities are present
         run: |
           set -euo pipefail
-          out=$(docker run --rm ${{ env.IMAGE }}:ci getcap \
+          # netops-getcap resolves symlinks first: traceroute lives behind a
+          # Debian alternatives link, and capabilities are on the target, so
+          # plain `getcap /usr/bin/traceroute` prints nothing at all.
+          out=$(docker run --rm ${{ env.IMAGE }}:ci netops-getcap \
             /usr/bin/nmap /usr/bin/ping /usr/bin/traceroute)
           echo "$out"
           for binary in nmap ping traceroute; do

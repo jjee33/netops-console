@@ -51,7 +51,7 @@ body:
       label: If this is a discovery problem
       description: These two account for most reports of empty or partial inventories.
       options:
-        - label: "`docker compose exec app getcap /usr/bin/nmap` shows `cap_net_raw`"
+        - label: "`docker compose exec app netops-getcap /usr/bin/nmap` shows `cap_net_raw`"
         - label: The container uses host or macvlan networking, not bridge
 
   - type: checkboxes

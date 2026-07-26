@@ -87,7 +87,7 @@ shell: ## Shell into the running container as the app user
 .PHONY: smoke
 smoke: build ## Assert capabilities, non-root UID, and unprivileged tool use
 	@echo "==> file capabilities"
-	docker run --rm $(IMAGE):$(TAG) getcap /usr/bin/nmap /usr/bin/ping /usr/bin/traceroute
+	docker run --rm $(IMAGE):$(TAG) netops-getcap /usr/bin/nmap /usr/bin/ping /usr/bin/traceroute
 	@echo "==> runtime UID (expect 10001)"
 	docker run --rm $(IMAGE):$(TAG) id -u
 	@echo "==> unprivileged tool use with NET_RAW"

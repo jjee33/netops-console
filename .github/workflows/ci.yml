@@ -339,11 +339,14 @@ jobs:
           set -euo pipefail
           # No volume mount: the check must happen before anything touches the
           # database, so a misconfigured start cannot half-apply a migration.
-          if docker run --rm -e NETOPS_WORKERS=4 ${{ env.IMAGE }}:ci 2>&1 \
-               | grep -q "safety property"; then
+          out=$(docker run --rm -e NETOPS_WORKERS=4 ${{ env.IMAGE }}:ci 2>&1 || true)
+          echo "$out"
+          # Match on a single line — the refusal message is wrapped, so a
+          # phrase spanning a line break will never match.
+          if echo "$out" | grep -q "Refusing to start"; then
             echo "confirmed: multi-worker start is refused"
           else
-            echo "::error::container started with NETOPS_WORKERS=4"
+            echo "::error::container did not refuse NETOPS_WORKERS=4"
             exit 1
           fi
 

@@ -70,6 +70,7 @@ These are worth running once. Each has a silent failure mode.
 | Check | Command | Expected |
 |---|---|---|
 | File capabilities | `docker compose exec app netops-getcap /usr/bin/nmap /usr/bin/ping /usr/bin/traceroute` | `cap_net_raw=ep` on all three |
+| Raw sockets really work | `docker compose exec app nmap -sS -p 22 -Pn 127.0.0.1` | A result, not "requires root privileges" |
 | Unprivileged scan | `docker compose exec app nmap -sn 192.168.1.0/24` | Hosts found, MAC addresses populated |
 | Running non-root | `docker compose exec app id -u` | `10001` |
 | Not LAN-exposed | `ss -ltn \| grep 8000` | `127.0.0.1:8000`, never `0.0.0.0:8000` |
@@ -77,6 +78,10 @@ These are worth running once. Each has a silent failure mode.
 | Proxy reachable | `curl -kI https://netops.lan/` | `200` |
 
 **Empty MAC and vendor columns after a scan** is the signature of bridge networking. It does not error — the scan succeeds and returns less. Confirm `network_mode: host` is in effect.
+
+**"You requested a scan type which requires root privileges"** means `NMAP_PRIVILEGED` is not set. nmap decides whether it may use raw sockets by checking `geteuid()` rather than checking its own capabilities, so it refuses SYN and ARP scans as a non-root user even when `CAP_NET_RAW` is present and working. The image sets `NMAP_PRIVILEGED=1` for this reason. If you override the environment wholesale, keep it. It grants nothing — a genuinely missing capability still fails with `EPERM`.
+
+Note that the first three checks in the table above can all pass with no raw socket at all: `nmap -sn` against loopback degrades to a TCP connect scan, `ping` uses an ICMP datagram socket because Docker sets `net.ipv4.ping_group_range` permissively, and `traceroute` defaults to UDP probes. The SYN scan is the one that actually proves it.
 
 ## Things that will break this install
 

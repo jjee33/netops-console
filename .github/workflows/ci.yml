@@ -307,17 +307,32 @@ jobs:
         run: |
           set -euo pipefail
           docker restart netops-ci > /dev/null
-          sleep 12
-          logs=$(docker logs --since 30s netops-ci 2>&1)
+          for _ in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8000/healthz; then break; fi
+            sleep 2
+          done
+
+          # Count over the whole log rather than filtering by time: the first
+          # boot is only seconds old, so any --since window wide enough to
+          # capture the restart also captures the original start.
+          logs=$(docker logs netops-ci 2>&1)
           echo "$logs"
-          echo "$logs" | grep -q "using existing credential-encryption key" \
-            || { echo "::error::second start did not reuse the existing key"; exit 1; }
-          echo "$logs" | grep -q "an account already exists" \
-            || { echo "::error::second start did not skip admin bootstrap"; exit 1; }
-          if echo "$logs" | grep -q "Initial admin account created"; then
-            echo "::error::admin password was rotated on restart"; exit 1
+
+          created=$(echo "$logs" | grep -c "Initial admin account created" || true)
+          if [ "$created" != "1" ]; then
+            echo "::error::admin account was bootstrapped $created times; expected exactly 1"
+            exit 1
           fi
-          echo "restart is idempotent"
+
+          reused=$(echo "$logs" | grep -c "using existing credential-encryption key" || true)
+          if [ "$reused" -lt 1 ]; then
+            echo "::error::restart did not reuse the existing encryption key"
+            exit 1
+          fi
+
+          echo "$logs" | grep -q "an account already exists" \
+            || { echo "::error::restart did not skip the admin bootstrap"; exit 1; }
+          echo "restart is idempotent: one bootstrap, key reused"
 
       - name: Refuses to start with multiple workers
         run: |

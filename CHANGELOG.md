@@ -13,7 +13,9 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 ### Added
 - Project scaffold, Apache-2.0 license, and public repository.
 - Container build with non-root runtime user and file capabilities on `nmap`, `ping`,
-  and `traceroute`, so raw sockets work without running as root.
+  and `traceroute`, so raw sockets work without running as root. `NMAP_PRIVILEGED=1`
+  is set because nmap gates SYN and ARP scans on `geteuid()` rather than on its own
+  capabilities, and refuses them otherwise even when `CAP_NET_RAW` is present.
 - First-run bootstrap: generates session and encryption keys, applies migrations, and
   creates an initial admin account with a random password printed once to the logs.
 - Compose files for the published image, local source builds, and an optional

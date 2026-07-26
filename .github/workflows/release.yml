@@ -1,0 +1,292 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Refuse to publish anything whose declared version disagrees with its tag.
+  # A mismatch here means the image reports a version its contents are not.
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verify tag
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Tag matches pyproject version
+        id: check
+        run: |
+          set -euo pipefail
+          pip install --quiet packaging
+          raw_tag="${{ inputs.tag || github.ref_name }}"
+          python - "$raw_tag" <<'PY' >> "$GITHUB_OUTPUT"
+          import re, sys, tomllib
+          from packaging.version import Version
+
+          tag = sys.argv[1].lstrip("v")
+          with open("pyproject.toml", "rb") as fh:
+              declared = tomllib.load(fh)["project"]["version"]
+
+          # PEP 440 and semver spell prereleases differently: 0.1.0-alpha.1
+          # normalises to 0.1.0a1. Compare normalised forms, not strings.
+          if Version(tag) != Version(declared):
+              print(f"::error::tag {tag!r} does not match pyproject version {declared!r}",
+                    file=sys.stderr)
+              sys.exit(1)
+
+          version = Version(tag)
+          print(f"version={sys.argv[1]}")
+          print(f"prerelease={'true' if version.is_prerelease else 'false'}")
+          print(f"tag {tag} matches pyproject {declared}", file=sys.stderr)
+          PY
+
+  # ---------------------------------------------------------------------------
+  # Build each architecture on its own native runner and push by digest.
+  # arm64 runners are free for public repositories and roughly an order of
+  # magnitude faster than emulating arm64 with QEMU on an amd64 runner.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=release-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          # Filename is the bare digest; the publish job globs these to build
+          # the manifest list.
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Combine the per-architecture digests into one multi-arch manifest, then tag
+  # it. `latest` is applied ONLY to a stable release — someone pulling `latest`
+  # must get a release, not a prerelease and not the tip of main.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish manifest
+    needs: [verify, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.manifest.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/${IMAGE_NAME}"
+          bare="${VERSION#v}"
+          tags="-t ${image}:${VERSION} -t ${image}:${bare}"
+          if [ "$PRERELEASE" = "false" ]; then
+            major="${bare%%.*}"
+            minor="${bare%.*}"
+            tags="$tags -t ${image}:${minor} -t ${image}:${major} -t ${image}:latest"
+          else
+            echo "prerelease — publishing the exact version only, no floating tags"
+          fi
+          echo "args=$tags" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push manifest
+        id: manifest
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2046
+          docker buildx imagetools create ${{ steps.tags.outputs.args }} \
+            $(printf '${{ steps.tags.outputs.image }}@sha256:%s ' *)
+          digest=$(docker buildx imagetools inspect \
+            "${{ steps.tags.outputs.image }}:${{ needs.verify.outputs.version }}" \
+            --format '{{json .Manifest}}' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "published $digest"
+
+      - name: Verify the manifest really is multi-arch
+        run: |
+          set -euo pipefail
+          out=$(docker buildx imagetools inspect \
+            "${{ steps.tags.outputs.image }}:${{ needs.verify.outputs.version }}")
+          echo "$out"
+          for platform in linux/amd64 linux/arm64; do
+            echo "$out" | grep -q "$platform" \
+              || { echo "::error::manifest is missing $platform"; exit 1; }
+          done
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign the manifest
+        # Keyless: the signing identity is this workflow's OIDC token, so there
+        # is no private key to store, leak, or rotate.
+        run: |
+          set -euo pipefail
+          cosign sign --yes \
+            "${{ steps.tags.outputs.image }}@${{ steps.manifest.outputs.digest }}"
+
+      - name: Release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          version="${{ needs.verify.outputs.version }}"
+          {
+            echo "## Container image"
+            echo
+            echo '```'
+            echo "docker pull ${{ steps.tags.outputs.image }}:${version}"
+            echo '```'
+            echo
+            echo "\`linux/amd64\` and \`linux/arm64\`. Signed, with an SBOM and build provenance."
+            echo
+            echo '```bash'
+            echo "cosign verify ${{ steps.tags.outputs.image }}:${version} \\"
+            echo "  --certificate-identity-regexp '^https://github\\.com/${{ github.repository }}/' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com"
+            echo '```'
+            echo
+            echo "## Changes"
+            echo
+            awk '/^## \[/{ if (seen) exit; if ($0 !~ /Unreleased/) seen=1 } seen' CHANGELOG.md \
+              || echo "See CHANGELOG.md"
+          } > /tmp/notes.md
+          cat /tmp/notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          flag=""
+          if [ "${{ needs.verify.outputs.prerelease }}" = "true" ]; then
+            flag="--prerelease"
+          fi
+          gh release create "${{ needs.verify.outputs.version }}" \
+            --title "${{ needs.verify.outputs.version }}" \
+            --notes-file /tmp/notes.md \
+            --verify-tag \
+            $flag
+
+  # ---------------------------------------------------------------------------
+  # Scan what was actually published, not what was built locally.
+  # ---------------------------------------------------------------------------
+  scan:
+    name: Scan published image
+    needs: [verify, publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps:
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.verify.outputs.version }}
+          format: sarif
+          output: trivy.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image

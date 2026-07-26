@@ -1,0 +1,22 @@
+# Development overlay — builds from the local source tree instead of pulling.
+#
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d --build
+#
+# or just `make dev`.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: ghcr.io/jjee33/netops-console:dev
+    pull_policy: never
+
+    environment:
+      NETOPS_LOG_LEVEL: debug
+      # Widen if you are testing against a lab range outside the defaults.
+      NETOPS_ALLOWED_CIDRS: "192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
+
+    # Keep restart off in development so a crash loop is visible rather than
+    # quietly retried forever.
+    restart: "no"

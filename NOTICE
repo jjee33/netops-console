@@ -1,0 +1,39 @@
+NetOps Console
+Copyright 2026 Joshua Gann
+
+This product includes software developed by Joshua Gann.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+---
+
+The distributed container image bundles third-party software under their
+own licenses, including but not limited to:
+
+  nmap             — Nmap Public Source License (NPSL), based on GPLv2
+  iputils          — BSD-3-Clause / GPL-2.0-or-later
+  traceroute       — GPL-2.0-or-later
+  bind9-dnsutils   — MPL-2.0
+  iproute2         — GPL-2.0-or-later
+  Debian base OS   — various, see /usr/share/doc in the image
+
+Python dependencies and their licenses are enumerated in the SBOM attached
+to each published release image. Retrieve it with:
+
+    docker buildx imagetools inspect ghcr.io/jjee33/netops-console:latest \
+      --format '{{ json .SBOM }}'
+
+Note on nmap: the NPSL is not an OSI-approved license and imposes conditions
+on redistribution, particularly for commercial derivative works. This project
+does not modify or statically link nmap; it invokes the distribution-packaged
+binary as a subprocess and redistributes it unmodified as part of the image.

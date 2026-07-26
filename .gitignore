@@ -1,0 +1,77 @@
+# ---------------------------------------------------------------------------
+# SECRETS AND KEY MATERIAL — this repo is public. Nothing below may ever be
+# committed. The runtime generates key material into ./data and ./secrets;
+# losing crypto_key destroys every stored credential, leaking it compromises
+# every stored credential.
+# ---------------------------------------------------------------------------
+secrets/
+data/
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+known_hosts
+.env
+.env.*
+!.env.example
+
+# SQLite database and WAL sidecar files
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Caddy runtime state (holds issued TLS private keys)
+caddy_data/
+caddy_config/
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+.installed.cfg
+
+# Virtualenvs
+.venv/
+venv/
+ENV/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.hypothesis/
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# ---------------------------------------------------------------------------
+# Local scratch
+# ---------------------------------------------------------------------------
+/scratch/
+*.local

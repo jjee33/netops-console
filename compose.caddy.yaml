@@ -1,0 +1,37 @@
+# Optional TLS reverse proxy.
+#
+#   docker compose -f compose.yaml -f compose.caddy.yaml up -d
+#
+# Caddy runs with host networking too, and that is not incidental. The app binds
+# 127.0.0.1 inside the HOST network namespace. A proxy container on the default
+# bridge network has its own namespace, so its 127.0.0.1 is a different loopback
+# and it cannot reach the app at all — the usual symptom is a connection-refused
+# 502 that looks like the app is down when it is running fine. Either run the
+# proxy on the host natively, or give it host networking as done here.
+#
+# By default this serves https://netops.localhost with a locally-trusted
+# certificate from Caddy's internal CA. To use a real hostname and a real
+# certificate, set NETOPS_HOSTNAME and NETOPS_TLS_EMAIL, and make sure ports 80
+# and 443 are reachable for the ACME challenge.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: netops-caddy
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      NETOPS_HOSTNAME: ${NETOPS_HOSTNAME:-netops.localhost}
+      # Leave empty to use Caddy's internal CA (self-signed, trusted locally).
+      NETOPS_TLS_EMAIL: ${NETOPS_TLS_EMAIL:-internal}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Holds issued certificates and their private keys — gitignored.
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

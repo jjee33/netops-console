@@ -1,0 +1,39 @@
+# TLS termination for NetOps Console.
+#
+# `tls internal` issues a certificate from Caddy's own CA — good for a homelab
+# hostname or an IP. For a public DNS name with a real certificate, set
+# NETOPS_TLS_EMAIL to your address and Caddy will use Let's Encrypt instead.
+
+{
+	# Do not advertise the proxy version.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$NETOPS_HOSTNAME} {
+	tls {$NETOPS_TLS_EMAIL}
+
+	encode zstd gzip
+
+	# The app is on the host's loopback because it must not be reachable from
+	# the LAN directly. This proxy is the only thing that should be.
+	reverse_proxy 127.0.0.1:8000 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# The application sets its own Content-Security-Policy; it is not
+		# duplicated here so there is one place to change it.
+		-Server
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

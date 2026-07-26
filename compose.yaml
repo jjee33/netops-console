@@ -1,0 +1,80 @@
+# NetOps Console — the file to copy if you just want to run this.
+#
+#   docker compose up -d
+#   docker compose logs app | grep -A3 'Initial admin'
+#
+# The app binds 127.0.0.1 and is not reachable from your LAN until you put a TLS
+# proxy in front of it. See compose.caddy.yaml for a working one.
+
+services:
+  app:
+    image: ghcr.io/jjee33/netops-console:${NETOPS_VERSION:-latest}
+    container_name: netops-console
+
+    # Layer 2 discovery needs to see the real LAN. Under bridge networking,
+    # MACs are hidden behind NAT and ARP discovery returns nothing useful — you
+    # get an inventory with empty MAC and vendor columns and no error to explain
+    # why. macvlan is the more isolated alternative; see docs/INSTALL.md.
+    # Note that host networking means `ports:` is ignored entirely.
+    network_mode: host
+
+    user: "10001:10001"
+
+    # CAP_NET_RAW is required for SYN scans, ARP host discovery, ping, and
+    # traceroute. It is NOT sufficient on its own: the binaries also carry file
+    # capabilities set at build time, because Docker grants no ambient
+    # capabilities to a non-root user. Both halves are needed.
+    cap_drop: ["ALL"]
+    cap_add: ["NET_RAW"]
+
+    # Deliberately NOT set: security_opt: no-new-privileges:true
+    # It sounds like an obvious hardening win and it is the one setting that
+    # will silently break this image — no_new_privs blocks file capabilities
+    # from being applied at execve, so nmap, ping, and traceroute all lose
+    # CAP_NET_RAW and fail with "operation not permitted".
+
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+    environment:
+      # Under host networking there is no port mapping. Binding 0.0.0.0 would
+      # publish this admin panel on every interface, bypassing TLS entirely.
+      NETOPS_BIND_HOST: 127.0.0.1
+      NETOPS_BIND_PORT: 8000
+      # Address of your reverse proxy. Wrong value = wrong client IP in the
+      # audit log.
+      NETOPS_FORWARDED_ALLOW_IPS: 127.0.0.1
+      NETOPS_DB_PATH: /data/netops.db
+      # Not a performance knob. See docs/INSTALL.md before touching this.
+      NETOPS_WORKERS: 1
+      NETOPS_LOG_LEVEL: info
+
+    volumes:
+      # Database, WAL sidecars, and generated keys. The only writable path.
+      - netops-data:/data
+
+    healthcheck:
+      # Uses Python, which is already in the image — no assumption about curl.
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import sys, urllib.request
+          sys.exit(0 if urllib.request.urlopen("http://127.0.0.1:8000/healthz", timeout=3).status == 200 else 1)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  netops-data:

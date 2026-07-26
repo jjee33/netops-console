@@ -1,0 +1,137 @@
+[project]
+name = "netops-console"
+version = "0.1.0-alpha.0"
+description = "Self-hosted network operations console: LAN discovery, diagnostics, and audited command execution for homelabs and small offices."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Joshua Gann" }]
+keywords = ["network", "homelab", "nmap", "discovery", "diagnostics", "ssh", "self-hosted"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking :: Monitoring",
+]
+
+dependencies = [
+    "fastapi>=0.115,<0.200",
+    "uvicorn[standard]>=0.32,<0.40",
+    "jinja2>=3.1,<4",
+    "python-multipart>=0.0.18,<0.1",
+    "itsdangerous>=2.2,<3",             # required by Starlette SessionMiddleware
+    "sqlalchemy[asyncio]>=2.0.36,<3",
+    "aiosqlite>=0.20,<0.22",
+    "alembic>=1.14,<2",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.6,<3",
+    "argon2-cffi>=23.1,<26",
+    "cryptography>=44,<48",
+    "asyncssh>=2.18,<3",
+    "defusedxml>=0.7.1,<0.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<1.2",
+    "pytest-cov>=6.0,<8",
+    "httpx>=0.28,<0.29",
+    "ruff>=0.8,<0.15",
+    "mypy>=1.13,<2",
+    "pip-audit>=2.7,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/jjee33/netops-console"
+Source = "https://github.com/jjee33/netops-console"
+Issues = "https://github.com/jjee33/netops-console/issues"
+Changelog = "https://github.com/jjee33/netops-console/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["templates/**/*.html", "static/**/*"]
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "ASYNC",     # async correctness — blocking calls in async defs (see plan §11.8)
+    "S",         # bandit security rules
+    "T20",       # no print() in app code
+    "SIM",       # simplify
+    "RUF",
+]
+ignore = [
+    "E501",      # line length is handled by the formatter
+    "B008",      # FastAPI Depends() in defaults is idiomatic
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Asserts and dummy secrets are the point in tests. S603/ASYNC221 cover
+# subprocess use, which tests need to drive alembic and the CLI as a real
+# operator would; the ban on new subprocess call sites applies to app/ only.
+"tests/**" = ["S101", "S105", "S106", "S108", "S603", "S607", "ASYNC221"]
+# app/cli.py is a console entry point — stdout is its user interface.
+"app/cli.py" = ["T201"]
+# CI assertion scripts: stdout is the report, and /tmp is the container's tmpfs.
+".github/scripts/**" = ["T201", "S108"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.flake8-bandit]
+# subprocess use is the entire point of this app, but it is confined to one module.
+# S603/S607 are NOT globally ignored — they must be silenced per-line in
+# app/core/execution.py with an explanatory noqa, so any new call site is loud.
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = false     # tightened to true at Phase 4 (see plan)
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "smoke: requires real network tools (nmap/ping/traceroute) present and capable",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = ["app/main.py", "migrations/*"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

@@ -1,0 +1,322 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: netops-console
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - run: pip install -e '.[dev]'
+
+      - name: ruff
+        run: |
+          ruff check --output-format=github app tests .github/scripts
+          ruff format --check app tests .github/scripts
+
+      - name: mypy
+        run: mypy
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+          failure-threshold: warning
+
+      - name: shellcheck
+        run: shellcheck docker/entrypoint.sh
+
+      - name: gitleaks
+        # Backstop for the one mistake this public repo cannot take back: the
+        # runtime generates key material, and a stray commit of it is
+        # unrecoverable once pushed.
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the declared floor, 3.13 is what the image ships.
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - run: pip install -e '.[dev]'
+
+      - name: Tests
+        run: pytest -q --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Migrations apply cleanly from empty
+        env:
+          NETOPS_DB_PATH: ${{ runner.temp }}/ci.db
+        run: alembic upgrade head
+
+      - name: No model/migration drift
+        # Catches a model changed without a migration — the failure that
+        # otherwise surfaces as a runtime OperationalError on someone's upgrade.
+        env:
+          NETOPS_DB_PATH: ${{ runner.temp }}/ci.db
+        run: alembic check
+
+      - name: Migrations are reversible
+        env:
+          NETOPS_DB_PATH: ${{ runner.temp }}/ci.db
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+
+  build:
+    name: Build image
+    runs-on: ubuntu-24.04
+    outputs:
+      digest: ${{ steps.build.outputs.imageid }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save image
+        run: docker save ${{ env.IMAGE }}:ci -o /tmp/image.tar
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  smoke:
+    name: Container smoke test
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-image
+          path: /tmp
+
+      - run: docker load -i /tmp/image.tar
+
+      # ---------------------------------------------------------------------
+      # The checks below exist because these failures are silent, not loud.
+      # A missing file capability does not error at build time; it errors the
+      # first time a user tries to scan their LAN.
+      # ---------------------------------------------------------------------
+
+      - name: File capabilities are present
+        run: |
+          set -euo pipefail
+          out=$(docker run --rm ${{ env.IMAGE }}:ci getcap \
+            /usr/bin/nmap /usr/bin/ping /usr/bin/traceroute)
+          echo "$out"
+          for binary in nmap ping traceroute; do
+            echo "$out" | grep -q "$binary.*cap_net_raw" \
+              || { echo "::error::$binary is missing cap_net_raw"; exit 1; }
+          done
+          # cap_net_admin in the file's permitted set would make execve fail
+          # with EPERM, because the container's bounding set is NET_RAW only.
+          if echo "$out" | grep -q cap_net_admin; then
+            echo "::error::cap_net_admin is set but not in the bounding set — nmap will not start"
+            exit 1
+          fi
+
+      - name: Runs as the non-root user
+        run: |
+          set -euo pipefail
+          uid=$(docker run --rm ${{ env.IMAGE }}:ci id -u)
+          gid=$(docker run --rm ${{ env.IMAGE }}:ci id -g)
+          echo "uid=$uid gid=$gid"
+          if [ "$uid" != "10001" ] || [ "$gid" != "10001" ]; then
+            echo "::error::container is not running as 10001:10001"
+            exit 1
+          fi
+
+      - name: Network tools work unprivileged with only NET_RAW
+        run: |
+          set -euo pipefail
+          docker run --rm --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci sh -c '
+            set -e
+            nmap -sn 127.0.0.1/32 > /dev/null
+            ping -c1 -W2 127.0.0.1 > /dev/null
+            traceroute -m 1 -w 1 127.0.0.1 > /dev/null
+            echo "nmap, ping and traceroute all ran as uid $(id -u)"
+          '
+
+      - name: no-new-privileges breaks file capabilities (documenting the trap)
+        run: |
+          set -euo pipefail
+          # Asserts the compose comment is true: this is why the published
+          # compose.yaml must not set security_opt: no-new-privileges.
+          if docker run --rm --security-opt no-new-privileges:true \
+               --cap-drop=ALL --cap-add=NET_RAW ${{ env.IMAGE }}:ci \
+               nmap -sn 127.0.0.1/32 > /dev/null 2>&1; then
+            echo "::notice::nmap still worked under no-new-privileges; re-check the compose comment"
+          else
+            echo "confirmed: no-new-privileges strips file capabilities as documented"
+          fi
+
+      - name: First run on a fresh volume
+        run: |
+          set -euo pipefail
+          # Host networking and a loopback bind, exactly as compose.yaml runs it
+          # — this is the configuration users get, so it is the one to test.
+          docker volume create netops-ci-data > /dev/null
+          docker run -d --name netops-ci \
+            --network host \
+            --user 10001:10001 \
+            --cap-drop=ALL --cap-add=NET_RAW \
+            --read-only --tmpfs /tmp \
+            -v netops-ci-data:/data \
+            ${{ env.IMAGE }}:ci
+
+          for _ in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8000/healthz; then ready=1; break; fi
+            sleep 2
+          done
+          docker logs netops-ci
+          [ "${ready:-0}" = "1" ] || { echo "::error::app did not become healthy"; exit 1; }
+
+      - name: Keys and admin password were generated, not defaulted
+        run: |
+          set -euo pipefail
+          logs=$(docker logs netops-ci 2>&1)
+          echo "$logs" | grep -q "generated a new session-signing key" \
+            || { echo "::error::session key was not generated"; exit 1; }
+          echo "$logs" | grep -q "generated a new credential-encryption key" \
+            || { echo "::error::crypto key was not generated"; exit 1; }
+          echo "$logs" | grep -q "BACK IT UP NOW" \
+            || { echo "::error::missing the crypto key backup warning"; exit 1; }
+          echo "$logs" | grep -q "Initial admin account created" \
+            || { echo "::error::admin bootstrap did not run"; exit 1; }
+          docker exec netops-ci sh -c '[ "$(stat -c %a /data/secrets/crypto_key)" = "600" ]' \
+            || { echo "::error::crypto key is not mode 0600"; exit 1; }
+
+      - name: Runtime database state and backup consistency
+        run: |
+          set -euo pipefail
+          docker exec -i netops-ci python - < .github/scripts/verify_runtime.py
+
+      - name: Bound to loopback only, never the LAN
+        run: |
+          set -euo pipefail
+          # Under host networking there is no port mapping, so a 0.0.0.0 bind
+          # would publish an HTTP admin panel on every interface of the host.
+          ss -ltnp | grep ':8000' || true
+          if ss -ltn | grep -qE '0\.0\.0\.0:8000|\*:8000'; then
+            echo "::error::listening on all interfaces — the admin panel is LAN-exposed"
+            exit 1
+          fi
+          ss -ltn | grep -q '127.0.0.1:8000' \
+            || { echo "::error::not listening on loopback"; exit 1; }
+
+      - name: Health endpoint discloses nothing
+        run: |
+          set -euo pipefail
+          body=$(curl -fsS http://127.0.0.1:8000/healthz)
+          headers=$(curl -fsSI http://127.0.0.1:8000/healthz)
+          echo "$headers"
+          [ -z "$body" ] || { echo "::error::/healthz returned a body: $body"; exit 1; }
+          # `if` rather than `grep && exit`: under `set -e` a non-matching grep
+          # would end the step with a failure, which is the passing case here.
+          if echo "$headers" | grep -qi '^server:'; then
+            echo "::error::Server header is exposed"; exit 1
+          fi
+          version=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
+          if echo "$headers" | grep -q "$version"; then
+            echo "::error::version disclosed in headers"; exit 1
+          fi
+          echo "healthz discloses nothing"
+
+      - name: Restart is idempotent and does not rotate credentials
+        run: |
+          set -euo pipefail
+          docker restart netops-ci > /dev/null
+          sleep 12
+          logs=$(docker logs --since 30s netops-ci 2>&1)
+          echo "$logs"
+          echo "$logs" | grep -q "using existing credential-encryption key" \
+            || { echo "::error::second start did not reuse the existing key"; exit 1; }
+          echo "$logs" | grep -q "an account already exists" \
+            || { echo "::error::second start did not skip admin bootstrap"; exit 1; }
+          if echo "$logs" | grep -q "Initial admin account created"; then
+            echo "::error::admin password was rotated on restart"; exit 1
+          fi
+          echo "restart is idempotent"
+
+      - name: Refuses to start with multiple workers
+        run: |
+          set -euo pipefail
+          # No volume mount: the check must happen before anything touches the
+          # database, so a misconfigured start cannot half-apply a migration.
+          if docker run --rm -e NETOPS_WORKERS=4 ${{ env.IMAGE }}:ci 2>&1 \
+               | grep -q "safety property"; then
+            echo "confirmed: multi-worker start is refused"
+          else
+            echo "::error::container started with NETOPS_WORKERS=4"
+            exit 1
+          fi
+
+      - name: Backup CLI works against a live instance
+        run: |
+          set -euo pipefail
+          docker exec netops-ci python -m app.cli backup /tmp/cli-backup.db
+          # Refuses to clobber an existing file rather than silently replacing
+          # someone's only backup.
+          if docker exec netops-ci python -m app.cli backup /tmp/cli-backup.db; then
+            echo "::error::backup overwrote an existing file"; exit 1
+          fi
+
+      - name: Collect logs on failure
+        if: failure()
+        run: docker logs netops-ci || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f netops-ci || true
+          docker volume rm netops-ci-data || true

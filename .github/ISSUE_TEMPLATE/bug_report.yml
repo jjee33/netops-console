@@ -1,0 +1,65 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not paste credentials, private keys, hostnames you would rather
+        not publish, or full network inventories. Redact before pasting — this
+        issue is public and permanent.
+
+        For a security vulnerability, use private reporting instead:
+        https://github.com/jjee33/netops-console/security/advisories/new
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/jjee33/netops-console:latest`
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: network-mode
+    attributes:
+      label: Container network mode
+      options: [host, macvlan, bridge, other]
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what occurred instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`docker compose logs app`. Redact hostnames and addresses you do not want public."
+      render: shell
+
+  - type: checkboxes
+    id: discovery-checks
+    attributes:
+      label: If this is a discovery problem
+      description: These two account for most reports of empty or partial inventories.
+      options:
+        - label: "`docker compose exec app getcap /usr/bin/nmap` shows `cap_net_raw`"
+        - label: The container uses host or macvlan networking, not bridge
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am running a single worker (the default)
+          required: true
+        - label: I have removed credentials and sensitive network details from this report
+          required: true

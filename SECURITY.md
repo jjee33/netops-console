@@ -63,3 +63,4 @@ Controls that are yours, not the application's:
 4. **Prefer `ForceCommand`-restricted SSH keys on targets.** It is the only control that survives a compromise of this application.
 5. **Do not put an SSH user in the `docker` group** unless you accept that the credential is a root credential on that host.
 6. **Keep the image current.** It bundles nmap and OpenSSL. Releases are scanned weekly, but only you can pull.
+7. **The initial admin password is printed to the container logs.** This is deliberate — it is the only channel available before an account exists, and anyone who can read those logs already has Docker access, which is root-equivalent on the host. It does mean the password transits your logging pipeline, so if you ship container logs to a third party, change the password promptly and consider setting `NETOPS_ADMIN_PASSWORD` instead. It is a one-time value and the account is forced to rotate it at first login.

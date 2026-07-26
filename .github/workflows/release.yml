@@ -43,7 +43,7 @@ jobs:
           pip install --quiet packaging
           raw_tag="${{ inputs.tag || github.ref_name }}"
           python - "$raw_tag" <<'PY' >> "$GITHUB_OUTPUT"
-          import re, sys, tomllib
+          import sys, tomllib
           from packaging.version import Version
 
           tag = sys.argv[1].lstrip("v")
@@ -278,7 +278,7 @@ jobs:
       packages: read
       security-events: write
     steps:
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.verify.outputs.version }}
           format: sarif

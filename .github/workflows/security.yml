@@ -46,7 +46,7 @@ jobs:
         # Findings are uploaded rather than failing the run, so a new CVE in the
         # base image raises an alert instead of breaking an unrelated push. The
         # release workflow is where a scan gates publication.
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository }}:latest
           format: sarif

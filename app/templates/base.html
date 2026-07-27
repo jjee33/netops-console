@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}NetOps Console{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="icon" href="data:,">
+  {# CSP forbids inline script, so HTMX is vendored rather than loaded from a CDN. #}
+  <script src="/static/js/htmx.min.js" defer></script>
+</head>
+{# hx-headers puts the CSRF token on every HTMX request. Forms carry it as a
+   hidden field instead; both paths are checked by the same middleware. #}
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+
+{% if current_user %}
+<header class="topbar">
+  <a class="brand" href="/">NetOps&nbsp;Console</a>
+  <nav>
+    <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>Dashboard</a>
+    <a href="/settings" {% if request.url.path == '/settings' %}class="active"{% endif %}>Settings</a>
+  </nav>
+  <div class="topbar-right">
+    <span class="user">{{ current_user.username }}</span>
+    <a href="/account/password">Password</a>
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="link-button">Log out</button>
+    </form>
+  </div>
+</header>
+{% endif %}
+
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer">
+  <span>NetOps Console {{ version }}</span>
+  <span class="sep">·</span>
+  <span>Manage only networks you are authorised to manage.</span>
+</footer>
+
+</body>
+</html>

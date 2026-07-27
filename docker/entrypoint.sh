@@ -144,7 +144,7 @@ serve() {
   fi
 
   log "starting on ${host}:${port} (1 worker)"
-  exec uvicorn app.main:app \
+  exec uvicorn app.main:create_app --factory \
     --host "$host" \
     --port "$port" \
     --workers 1 \

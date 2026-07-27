@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — NetOps Console{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<section class="tiles">
+  <div class="tile">
+    <span class="tile-value">{{ stats.total }}</span>
+    <span class="tile-label">Devices</span>
+  </div>
+  <div class="tile">
+    <span class="tile-value status-online">{{ stats.online }}</span>
+    <span class="tile-label">Online</span>
+  </div>
+  <div class="tile">
+    <span class="tile-value status-offline">{{ stats.offline }}</span>
+    <span class="tile-label">Offline</span>
+  </div>
+  <div class="tile">
+    <span class="tile-value status-unknown">{{ stats.unknown }}</span>
+    <span class="tile-label">Unknown</span>
+  </div>
+</section>
+
+{% if not devices %}
+<section class="empty-state">
+  <h2>No devices yet</h2>
+  <p>
+    Discovery arrives in the next release. Meanwhile, confirm the ranges this
+    instance is permitted to touch — nothing outside them can be scanned or
+    contacted.
+  </p>
+
+  <h3>Allowed ranges</h3>
+  <ul class="cidr-list">
+    {% for cidr in allowed_cidrs %}
+    <li><code>{{ cidr }}</code></li>
+    {% else %}
+    <li class="muted">None configured.</li>
+    {% endfor %}
+  </ul>
+
+  <p><a class="primary-link" href="/settings">Edit settings</a></p>
+</section>
+{% endif %}
+{% endblock %}

@@ -303,6 +303,55 @@ jobs:
           fi
           echo "healthz discloses nothing"
 
+      - name: Login page and static assets are served
+        run: |
+          set -euo pipefail
+          page=$(curl -fsS http://127.0.0.1:8000/login)
+          echo "$page" | grep -q 'name="csrf_token"' \
+            || { echo "::error::login form has no CSRF token"; exit 1; }
+          # CSP forbids inline script, so a CDN reference would mean a page that
+          # silently loads nothing.
+          if echo "$page" | grep -qiE 'src="https?://'; then
+            echo "::error::a script or asset is loaded from a remote origin"; exit 1
+          fi
+          curl -fsS -o /dev/null http://127.0.0.1:8000/static/js/htmx.min.js \
+            || { echo "::error::vendored HTMX is not served"; exit 1; }
+          curl -fsS -o /dev/null http://127.0.0.1:8000/static/css/app.css \
+            || { echo "::error::stylesheet is not served"; exit 1; }
+          echo "login page and vendored assets OK"
+
+      - name: Protected pages require authentication
+        run: |
+          set -euo pipefail
+          for path in / /settings /account/password; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8000${path}")
+            [ "$code" = "303" ] \
+              || { echo "::error::${path} returned ${code}, expected a redirect to /login"; exit 1; }
+          done
+          echo "all protected pages redirect when unauthenticated"
+
+      - name: CSRF is enforced on a real POST
+        run: |
+          set -euo pipefail
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            -d 'username=admin&password=whatever' http://127.0.0.1:8000/login)
+          [ "$code" = "403" ] \
+            || { echo "::error::POST without a CSRF token returned ${code}, expected 403"; exit 1; }
+          echo "CSRF enforced"
+
+      - name: Security headers are present in the container
+        run: |
+          set -euo pipefail
+          headers=$(curl -fsS -D - -o /dev/null http://127.0.0.1:8000/login)
+          echo "$headers"
+          for header in content-security-policy x-frame-options x-content-type-options; do
+            echo "$headers" | grep -qi "^${header}:" \
+              || { echo "::error::missing ${header}"; exit 1; }
+          done
+          if echo "$headers" | grep -i content-security-policy | grep -q unsafe-inline; then
+            echo "::error::CSP allows unsafe-inline"; exit 1
+          fi
+
       - name: Restart is idempotent and does not rotate credentials
         run: |
           set -euo pipefail

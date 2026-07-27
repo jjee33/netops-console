@@ -59,6 +59,8 @@ Two working options:
 
 Whichever you choose, set `NETOPS_FORWARDED_ALLOW_IPS` to the proxy's address. If it is wrong, every client IP in your audit log is wrong. Do not set it to `*`.
 
+That setting has a second consequence worth knowing: login rate limiting is per client IP. If the forwarded-header configuration is wrong, every request appears to come from the proxy itself, so ten failed logins from anywhere will rate-limit everyone. With a single operator this is a minor annoyance rather than a real outage, but it looks like a bug if you have not seen it before.
+
 ## Configure subnets
 
 Log in, change the admin password when prompted, then go to **Settings** and set the private IPv4 ranges this instance may touch. Discovery, diagnostics, and actions targeting anything outside those ranges are rejected.

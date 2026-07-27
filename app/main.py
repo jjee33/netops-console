@@ -27,6 +27,7 @@ from app.core.session import ABSOLUTE_LIFETIME
 from app.modules.auth.dependencies import MustChangePassword, RedirectToLogin, redirect_to_login
 from app.modules.auth.routes import router as auth_router
 from app.modules.devices.routes import router as devices_router
+from app.modules.discovery.routes import router as discovery_router
 from app.modules.settings.routes import router as settings_router
 
 logger = logging.getLogger("netops")
@@ -83,6 +84,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(devices_router)
+    app.include_router(discovery_router)
     app.include_router(settings_router)
 
     @app.get("/healthz", include_in_schema=False)

@@ -5,7 +5,9 @@ Every model must be imported here so Alembic's autogenerate sees it in
 migration and a schema that silently drifts from the code.
 """
 
+from app.models.device import Device, DevicePort
+from app.models.discovery import DiscoveryRun
 from app.models.setting import Setting
 from app.models.user import User
 
-__all__ = ["Setting", "User"]
+__all__ = ["Device", "DevicePort", "DiscoveryRun", "Setting", "User"]

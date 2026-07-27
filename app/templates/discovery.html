@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Discovery — NetOps Console{% endblock %}
+
+{% block content %}
+<h1>Discovery</h1>
+
+{% if error %}
+<p class="alert alert-error" role="alert">{{ error }}</p>
+{% endif %}
+
+<section class="card">
+  <h2>Run a scan</h2>
+
+  <form method="post" action="/discovery/run" class="scan-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <label for="subnet">Subnet</label>
+    <input id="subnet" name="subnet" type="text" required spellcheck="false"
+           placeholder="e.g. 192.168.1.0/24"
+           value="{{ settings.allowed_cidrs[0] if settings.allowed_cidrs else '' }}">
+    <p class="field-hint">
+      Must sit inside your allowed ranges and cover no more than
+      {{ settings.max_scan_hosts }} addresses.
+      {% if settings.allowed_cidrs %}
+      Allowed: {% for cidr in settings.allowed_cidrs %}<code>{{ cidr }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+      {% else %}
+      <strong>No ranges are configured yet</strong> — set them in
+      <a href="/settings">Settings</a> first.
+      {% endif %}
+    </p>
+
+    <label class="checkbox">
+      <input type="checkbox" name="scan_ports" value="1" checked>
+      Also check common ports
+    </label>
+    <p class="field-hint">
+      Slower, but populates services and open ports. Uncheck for host discovery only.
+    </p>
+
+    <button type="submit" class="primary">Start scan</button>
+  </form>
+</section>
+
+{% if active_run %}
+<section class="card">
+  <h2>Current scan</h2>
+  {% with run = active_run %}{% include "partials/run_status.html" %}{% endwith %}
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>History</h2>
+  {% if runs %}
+  <table class="data-table compact">
+    <thead>
+      <tr><th>Started</th><th>Subnet</th><th>Status</th><th>Found</th><th>New</th><th>By</th></tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td class="muted">{{ run.started_at.strftime('%Y-%m-%d %H:%M') if run.started_at else '—' }}</td>
+        <td><code>{{ run.subnet }}</code></td>
+        <td><span class="badge badge-run-{{ run.status }}">{{ run.status }}</span></td>
+        <td>{{ run.devices_found }}</td>
+        <td>{{ run.devices_new }}</td>
+        {# Snapshot, so the row stays readable after the account is gone. #}
+        <td class="muted">{{ run.username_snapshot or 'system' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No scans yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap" args="nmap -sn -oX - 10.0.0.0/24" start="1753900000" version="7.94">
+  <!-- No ports element at all — a bare host-discovery scan. -->
+  <host>
+    <status state="up" reason="arp-response"/>
+    <address addr="10.0.0.5" addrtype="ipv4"/>
+    <address addr="de:ad:be:ef:00:01" addrtype="mac"/>
+  </host>
+
+  <!-- Dual-stack: the IPv6 address must be ignored, not mistaken for the IP. -->
+  <host>
+    <status state="up" reason="echo-reply"/>
+    <address addr="10.0.0.6" addrtype="ipv4"/>
+    <address addr="fe80::1" addrtype="ipv6"/>
+  </host>
+
+  <!-- IPv6 only: nothing this version can act on. -->
+  <host>
+    <status state="up" reason="echo-reply"/>
+    <address addr="fe80::dead:beef" addrtype="ipv6"/>
+  </host>
+
+  <!-- Several hostnames; the first is taken. -->
+  <host>
+    <status state="up" reason="arp-response"/>
+    <address addr="10.0.0.7" addrtype="ipv4"/>
+    <hostnames>
+      <hostname name="first.lan" type="PTR"/>
+      <hostname name="second.lan" type="user"/>
+    </hostnames>
+  </host>
+
+  <!-- Empty hostnames element. -->
+  <host>
+    <status state="up" reason="arp-response"/>
+    <address addr="10.0.0.8" addrtype="ipv4"/>
+    <hostnames/>
+  </host>
+
+  <!-- Nonsense port data that must not crash the parse. -->
+  <host>
+    <status state="up" reason="arp-response"/>
+    <address addr="10.0.0.9" addrtype="ipv4"/>
+    <ports>
+      <port protocol="tcp" portid="0"><state state="open"/></port>
+      <port protocol="tcp" portid="99999"><state state="open"/></port>
+      <port protocol="tcp" portid="not-a-number"><state state="open"/></port>
+      <port protocol="sctp" portid="80"><state state="open"/></port>
+      <port protocol="tcp" portid="80"><state state="weird-state"/></port>
+      <port protocol="tcp" portid="443"/>
+    </ports>
+  </host>
+
+  <!-- A hostname containing a script payload: stored as data, escaped on
+       render, and never trusted as markup. -->
+  <host>
+    <status state="up" reason="arp-response"/>
+    <address addr="10.0.0.10" addrtype="ipv4"/>
+    <hostnames>
+      <hostname name="&lt;script&gt;alert(1)&lt;/script&gt;" type="PTR"/>
+    </hostnames>
+  </host>
+
+  <runstats>
+    <finished time="1753900010" elapsed="4.5"/>
+    <hosts up="7" down="0" total="7"/>
+  </runstats>
+</nmaprun>

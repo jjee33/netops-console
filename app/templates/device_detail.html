@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ device.display_name }} — NetOps Console{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ device.display_name }}</h1>
+  <a href="/devices">← All devices</a>
+</div>
+
+<section class="detail-grid">
+  <div class="card">
+    <h2>Details</h2>
+    <dl class="facts">
+      <dt>IP address</dt><dd><code>{{ device.ip_address }}</code></dd>
+      <dt>MAC address</dt>
+      <dd>
+        {% if device.mac_address %}<code>{{ device.mac_address }}</code>
+        {% else %}<span class="muted">not visible — device is routed, not on this segment</span>{% endif %}
+      </dd>
+      <dt>Vendor</dt><dd>{{ device.vendor or '—' }}</dd>
+      {# Hostname is discovered from the network and therefore untrusted. It is
+         escaped here, and the link below is built only if the scheme checks out. #}
+      <dt>Hostname</dt><dd>{{ device.hostname or '—' }}</dd>
+      <dt>Status</dt><dd><span class="badge badge-{{ device.status }}">{{ device.status }}</span></dd>
+      <dt>First seen</dt><dd>{{ device.first_seen.strftime('%Y-%m-%d %H:%M') if device.first_seen else '—' }}</dd>
+      <dt>Last seen</dt><dd>{{ device.last_seen.strftime('%Y-%m-%d %H:%M') if device.last_seen else '—' }}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Open ports</h2>
+    {% if ports %}
+    <table class="data-table compact">
+      <thead><tr><th>Port</th><th>Service</th><th>State</th><th>Last seen</th></tr></thead>
+      <tbody>
+        {% for port in ports %}
+        <tr>
+          <td><code>{{ port.port }}/{{ port.protocol }}</code></td>
+          <td>{{ port.service or '—' }}</td>
+          <td><span class="badge badge-port-{{ port.state }}">{{ port.state }}</span></td>
+          <td class="muted">{{ port.last_seen.strftime('%Y-%m-%d %H:%M') if port.last_seen else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if 80 in ports|map(attribute='port')|list or 443 in ports|map(attribute='port')|list %}
+    <p class="field-hint">
+      {% set web = 'https://' ~ device.ip_address if 443 in ports|map(attribute='port')|list else 'http://' ~ device.ip_address %}
+      {% set safe = web | safe_external_url %}
+      {% if safe %}<a href="{{ safe }}" target="_blank" rel="noopener noreferrer">Open web interface ↗</a>{% endif %}
+    </p>
+    {% endif %}
+    {% else %}
+    <p class="muted">No open ports recorded. Run a scan with port detection enabled.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Edit</h2>
+  <form method="post" action="/devices/{{ device.id }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <label for="name">Name</label>
+    <input id="name" name="name" type="text" value="{{ device.name or '' }}"
+           placeholder="A label of your choosing">
+    <p class="field-hint">Set by you, and never overwritten by a scan.</p>
+
+    <label for="device_type">Type</label>
+    <input id="device_type" name="device_type" type="text" value="{{ device.device_type or '' }}"
+           placeholder="switch, nas, camera…">
+
+    <label for="notes">Notes</label>
+    <textarea id="notes" name="notes" rows="3">{{ device.notes or '' }}</textarea>
+
+    <button type="submit" class="primary">Save</button>
+  </form>
+</section>
+
+<section class="card danger">
+  <h2>Remove</h2>
+  <p class="muted">
+    Removing hides this device from the inventory. Its history is kept, and a
+    later scan that finds it again restores this same record rather than
+    creating a second one.
+  </p>
+  <form method="post" action="/devices/{{ device.id }}/delete">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="destructive">Remove device</button>
+  </form>
+</section>
+{% endblock %}

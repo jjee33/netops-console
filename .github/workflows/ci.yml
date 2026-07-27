@@ -323,7 +323,7 @@ jobs:
       - name: Protected pages require authentication
         run: |
           set -euo pipefail
-          for path in / /settings /account/password; do
+          for path in / /settings /account/password /devices /discovery; do
             code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8000${path}")
             [ "$code" = "303" ] \
               || { echo "::error::${path} returned ${code}, expected a redirect to /login"; exit 1; }

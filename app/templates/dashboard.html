@@ -2,7 +2,10 @@
 {% block title %}Dashboard — NetOps Console{% endblock %}
 
 {% block content %}
-<h1>Dashboard</h1>
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <a class="primary-link" href="/discovery">Run a scan</a>
+</div>
 
 <section class="tiles">
   <div class="tile">
@@ -23,14 +26,32 @@
   </div>
 </section>
 
-{% if not devices %}
+{% if devices %}
+<section class="card">
+  <div class="page-header">
+    <h2>Recently seen</h2>
+    <a href="/devices">All devices →</a>
+  </div>
+  <table class="data-table compact">
+    <thead><tr><th>IP address</th><th>Name</th><th>Vendor</th><th>Status</th><th>Last seen</th></tr></thead>
+    <tbody>
+      {% for device in devices %}
+      <tr>
+        <td><a href="/devices/{{ device.id }}"><code>{{ device.ip_address }}</code></a></td>
+        <td>{{ device.name or device.hostname or '—' }}</td>
+        <td>{{ device.vendor or '—' }}</td>
+        <td><span class="badge badge-{{ device.status }}">{{ device.status }}</span></td>
+        <td class="muted">{{ device.last_seen.strftime('%Y-%m-%d %H:%M') if device.last_seen else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
 <section class="empty-state">
   <h2>No devices yet</h2>
-  <p>
-    Discovery arrives in the next release. Meanwhile, confirm the ranges this
-    instance is permitted to touch — nothing outside them can be scanned or
-    contacted.
-  </p>
+  <p>Run a discovery scan to populate the inventory. Nothing outside the ranges
+     below can be scanned or contacted.</p>
 
   <h3>Allowed ranges</h3>
   <ul class="cidr-list">
@@ -41,7 +62,34 @@
     {% endfor %}
   </ul>
 
-  <p><a class="primary-link" href="/settings">Edit settings</a></p>
+  <p>
+    <a class="primary-link" href="/discovery">Run a scan</a>
+    <span class="sep">·</span>
+    <a href="/settings">Edit settings</a>
+  </p>
+</section>
+{% endif %}
+
+{% if runs %}
+<section class="card">
+  <div class="page-header">
+    <h2>Recent scans</h2>
+    <a href="/discovery">History →</a>
+  </div>
+  <table class="data-table compact">
+    <thead><tr><th>Started</th><th>Subnet</th><th>Status</th><th>Found</th><th>By</th></tr></thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td class="muted">{{ run.started_at.strftime('%Y-%m-%d %H:%M') if run.started_at else '—' }}</td>
+        <td><code>{{ run.subnet }}</code></td>
+        <td><span class="badge badge-run-{{ run.status }}">{{ run.status }}</span></td>
+        <td>{{ run.devices_found }}</td>
+        <td class="muted">{{ run.username_snapshot or 'system' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </section>
 {% endif %}
 {% endblock %}

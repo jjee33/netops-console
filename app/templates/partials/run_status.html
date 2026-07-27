@@ -1,0 +1,20 @@
+{# Polls itself while the scan is running, then stops. #}
+<div id="run-status" class="run-status run-{{ run.status }}"
+     {% if run.status == 'running' %}
+     hx-get="/discovery/runs/{{ run.id }}" hx-trigger="every 2s" hx-swap="outerHTML"
+     {% endif %}>
+  {% if run.status == 'running' %}
+    <span class="spinner" aria-hidden="true"></span>
+    <strong>Scanning {{ run.subnet }}…</strong>
+    <p class="muted">
+      No live output in this version — the result appears when the scan finishes.
+    </p>
+  {% elif run.status == 'success' %}
+    <strong>Scan of {{ run.subnet }} complete.</strong>
+    <p>{{ run.output_summary }}
+       {% if run.devices_found %}<a href="/devices">View devices</a>{% endif %}</p>
+  {% else %}
+    <strong>Scan of {{ run.subnet }} {{ run.status }}.</strong>
+    <p class="muted">{{ run.output_summary or 'No detail recorded.' }}</p>
+  {% endif %}
+</div>

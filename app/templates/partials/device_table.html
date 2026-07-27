@@ -1,0 +1,35 @@
+<table class="data-table" id="device-table">
+  <thead>
+    <tr>
+      {% for key, label in [('ip','IP address'), ('name','Name'), ('hostname','Hostname'),
+                            ('vendor','Vendor'), ('status','Status'), ('last_seen','Last seen')] %}
+      <th>
+        <a href="/devices?q={{ q }}&sort={{ key }}&direction={{ next_direction if sort == key else 'asc' }}"
+           hx-get="/devices?q={{ q }}&sort={{ key }}&direction={{ next_direction if sort == key else 'asc' }}"
+           hx-target="#device-table" hx-swap="outerHTML">
+          {{ label }}{% if sort == key %}<span class="sort-arrow">{{ '▾' if direction == 'desc' else '▴' }}</span>{% endif %}
+        </a>
+      </th>
+      {% endfor %}
+      <th>Ports</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for device in devices %}
+    <tr>
+      <td><a href="/devices/{{ device.id }}"><code>{{ device.ip_address }}</code></a></td>
+      <td>{{ device.name or '—' }}</td>
+      {# Discovered from the network, so untrusted. Autoescaped, never |safe. #}
+      <td>{{ device.hostname or '—' }}</td>
+      <td>{{ device.vendor or '—' }}</td>
+      <td><span class="badge badge-{{ device.status }}">{{ device.status }}</span></td>
+      <td class="muted">{{ device.last_seen.strftime('%Y-%m-%d %H:%M') if device.last_seen else '—' }}</td>
+      <td class="muted">{{ device.ports | length }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted empty-row">
+      No devices{% if q %} matching “{{ q }}”{% endif %}. Run a discovery scan to populate the inventory.
+    </td></tr>
+    {% endfor %}
+  </tbody>
+</table>

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Devices — NetOps Console{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Devices</h1>
+  <a class="primary-link" href="/discovery">Run a scan</a>
+</div>
+
+<form class="search-form" role="search"
+      hx-get="/devices" hx-target="#device-table" hx-swap="outerHTML"
+      hx-trigger="submit, keyup changed delay:300ms from:#q">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="direction" value="{{ direction }}">
+  <label class="visually-hidden" for="q">Search devices</label>
+  <input id="q" name="q" type="text" value="{{ q }}" spellcheck="false"
+         placeholder="Search by address, name, hostname, vendor, or MAC">
+</form>
+
+{% include "partials/device_table.html" %}
+{% endblock %}

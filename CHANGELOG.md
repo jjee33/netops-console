@@ -10,6 +10,48 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.2] — 2026-07-27
+
+Discovery and device inventory.
+
+### Added
+- **ExecutionEngine** — the single path through which every command in the
+  application runs. No shell, argv arrays only, an allowlist of absolute-path
+  binaries, a hard timeout per run, and the whole *process group* killed on
+  expiry so children of `traceroute` and continuous `ping` cannot be orphaned.
+  Concurrency is bounded and the permit is released in a `finally`, because one
+  leaked permit is permanent. Discovery has its own separate, lower budget.
+- **Output sanitising** — ANSI and control characters stripped (including
+  carriage returns, which let later output overwrite earlier output), credential-
+  shaped lines masked, and a byte-measured size cap that cuts on a character
+  boundary.
+- **Discovery** — nmap host and port scanning, parsed with `defusedxml`. Targets
+  are validated against the allowlist and the host cap *before* nmap is invoked;
+  an oversized or out-of-scope range never becomes a process. Scans run as
+  background tasks with a polled status, so a reverse proxy cannot time out a
+  scan that is working.
+- **Device inventory** — sortable, searchable device list, device detail with
+  open ports, and operator-editable name, type, and notes that a rescan never
+  overwrites.
+- Device identity is MAC-first with address fallback, so a DHCP lease change
+  keeps one device rather than creating a second. A device first seen across a
+  router adopts its MAC when later scanned from its own segment instead of
+  duplicating, and a removed device that reappears is restored rather than
+  re-created alongside its own history.
+- Device removal is a soft delete. History survives, and the device page and
+  list exclude it.
+
+### Security
+- Discovered hostnames are rendered escaped everywhere, and any URL built from
+  device data is scheme-checked so a hostname of `javascript:…` cannot become a
+  clickable link.
+- XML entity expansion and external entity resolution are refused.
+
+### Fixed
+- Secret masking stopped at the first whitespace, so `Authorization: Bearer
+  <token>` masked only the word `Bearer` and wrote the token itself into stored
+  output. Patterns now consume the rest of the line.
+
 ## [0.1.0-alpha.1] — 2026-07-27
 
 First release with a usable interface. Still a prerelease: there is no discovery,
@@ -58,6 +100,7 @@ Delivery pipeline and container foundation. No usable application.
   asserts capabilities, the non-root UID, loopback-only binding, and SQLite pragmas.
 - Release pipeline publishing signed multi-arch images with SBOM and provenance.
 
-[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.1...HEAD
+[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.2...HEAD
+[0.1.0-alpha.2]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.0...v0.1.0-alpha.1
 [0.1.0-alpha.0]: https://github.com/jjee33/netops-console/releases/tag/v0.1.0-alpha.0

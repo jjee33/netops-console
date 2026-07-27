@@ -55,6 +55,9 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pointed at explicitly: the action does not reliably pick up a
+          # .gitleaks.toml from the repository root on its own.
+          GITLEAKS_CONFIG: ${{ github.workspace }}/.gitleaks.toml
 
   test:
     name: Test

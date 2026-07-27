@@ -10,7 +10,10 @@
 [extend]
 useDefault = true
 
-[[allowlists]]
+# Singular `[allowlist]`, not `[[allowlists]]` — the plural form parses without
+# error and is silently ignored, so the scan still fails and looks like the
+# allowlist simply did not match.
+[allowlist]
 description = """
 Fixtures for the output-redaction tests. These are invented strings whose entire
 purpose is to look like credentials, because the code under test has to

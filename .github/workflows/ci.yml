@@ -342,6 +342,70 @@ jobs:
             || { echo "::error::POST without a CSRF token returned ${code}, expected 403"; exit 1; }
           echo "CSRF enforced"
 
+      - name: Authenticated pages render in the shipped image
+        run: |
+          set -euo pipefail
+          # The test suite renders every page through ASGI, which proves the
+          # templates are correct but not that they were *shipped*. A template
+          # or static file missing from the image passes every test and 500s on
+          # first use. This exercises the real container.
+          jar=$(mktemp)
+          password=$(docker logs netops-ci 2>&1 | grep -m1 -oP 'password:\s+\K\S+')
+          [ -n "$password" ] || { echo "::error::could not read the bootstrap password"; exit 1; }
+
+          get_token() {
+            curl -fsS -c "$jar" -b "$jar" "http://127.0.0.1:8000$1" \
+              | grep -m1 -oP 'name="csrf_token" value="\K[^"]+'
+          }
+
+          token=$(get_token /login)
+          curl -fsS -c "$jar" -b "$jar" -o /dev/null \
+            -d "username=admin&password=${password}&next=/&csrf_token=${token}" \
+            http://127.0.0.1:8000/login
+
+          # Forced rotation gates everything else, so this also proves that path.
+          token=$(get_token /account/password)
+          curl -fsS -c "$jar" -b "$jar" -o /dev/null \
+            -d "current_password=${password}&new_password=ci-verification-passphrase&confirm_password=ci-verification-passphrase&csrf_token=${token}" \
+            http://127.0.0.1:8000/account/password
+
+          for path in / /devices /discovery /settings; do
+            body=$(curl -fsS -c "$jar" -b "$jar" "http://127.0.0.1:8000${path}")
+            echo "$body" | grep -q '</html>' \
+              || { echo "::error::${path} did not render a complete page"; exit 1; }
+            # `if`, not `grep && exit` — under `set -e` a non-matching grep ends
+            # the step with a failure, which is the passing case here.
+            if echo "$body" | grep -qi 'internal server error'; then
+              echo "::error::${path} returned a server error"; exit 1
+            fi
+            echo "  ${path} rendered"
+          done
+          rm -f "$jar"
+
+      - name: An out-of-scope scan is refused by the running container
+        run: |
+          set -euo pipefail
+          # End-to-end proof that the range guard holds in the shipped image,
+          # not only in unit tests.
+          jar=$(mktemp)
+          token=$(curl -fsS -c "$jar" -b "$jar" http://127.0.0.1:8000/login \
+            | grep -m1 -oP 'name="csrf_token" value="\K[^"]+')
+          curl -fsS -c "$jar" -b "$jar" -o /dev/null \
+            -d "username=admin&password=ci-verification-passphrase&next=/&csrf_token=${token}" \
+            http://127.0.0.1:8000/login
+
+          token=$(curl -fsS -c "$jar" -b "$jar" http://127.0.0.1:8000/discovery \
+            | grep -m1 -oP 'name="csrf_token" value="\K[^"]+')
+          code=$(curl -s -c "$jar" -b "$jar" -o /tmp/scan.html -w '%{http_code}' \
+            -d "subnet=8.8.8.0/24&csrf_token=${token}" http://127.0.0.1:8000/discovery/run)
+
+          [ "$code" = "400" ] \
+            || { echo "::error::a public range was not refused (HTTP ${code})"; exit 1; }
+          grep -q 'outside the configured' /tmp/scan.html \
+            || { echo "::error::refusal did not explain why"; exit 1; }
+          echo "out-of-scope scan refused before reaching nmap"
+          rm -f "$jar"
+
       - name: Security headers are present in the container
         run: |
           set -euo pipefail

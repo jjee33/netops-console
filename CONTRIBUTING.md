@@ -8,12 +8,12 @@ v0.1 is single-site, single-admin, IPv4, manual-trigger. Features listed as out 
 
 ## Development setup
 
-Requires Python 3.12 and Docker Engine with the Compose v2 plugin.
+Requires Python 3.12 or newer and Docker Engine with the Compose v2 plugin. The image ships 3.13.
 
 ```bash
 git clone git@github.com:jjee33/netops-console.git
 cd netops-console
-python3.12 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 ```
 
@@ -62,6 +62,8 @@ CI verifies capabilities, the non-root UID, unprivileged `nmap`/`ping`/`tracerou
 - Behaviour against actual network equipment
 
 If your change touches discovery, networking, or the container's network mode, test it on a real LAN and say so in the PR. Empty MAC and vendor columns are the specific failure mode here, and it fails silently rather than erroring.
+
+[docs/MANUAL_VERIFICATION.md](docs/MANUAL_VERIFICATION.md) is the checklist for exactly this.
 
 ## Commits and PRs
 

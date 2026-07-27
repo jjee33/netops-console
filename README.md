@@ -2,20 +2,34 @@
 
 Self-hosted network operations console for homelabs and small offices. Discovers what is on your LAN, runs diagnostics against it, and executes a fixed set of allowlisted commands — with every action written to an audit log.
 
+That is the goal. Discovery and inventory work today; diagnostics, actions and the audit log are still being built. See below.
+
 [![CI](https://github.com/jjee33/netops-console/actions/workflows/ci.yml/badge.svg)](https://github.com/jjee33/netops-console/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Image](https://img.shields.io/badge/ghcr.io-netops--console-blue?logo=docker)](https://github.com/jjee33/netops-console/pkgs/container/netops-console)
 
-> **Status: pre-release (v0.1.0-alpha).** Not yet ready for use. The schema may change between alpha tags without a migration path. Watch the repo for the v0.1.0 release.
+> **Status: pre-release (`v0.1.0-alpha.2`).** Usable but incomplete — see the table below for what actually works today. The schema may change between alpha tags without a migration path. Watch the repo for the v0.1.0 release.
 
 ---
 
-## What it does
+## What works today
 
-- **Discovery** — nmap-backed scans of subnets you configure, producing an inventory with IP, MAC, vendor, hostname, and open ports. Re-runnable without creating duplicates.
-- **Diagnostics** — ping, bounded continuous ping, traceroute, DNS, reverse DNS, TCP port test, limited service scan, ARP, and HTTP(S) check, all from the device page.
-- **Actions** — you define allowlisted commands (local or over SSH) with typed parameter schemas. The browser sends an action ID and parameters, never a command string.
-- **Audit** — every diagnostic, action, and discovery run is recorded with the acting user, client IP, parameters (secrets redacted), timing, exit code, and output. Deleting a device does not erase its history.
+| | |
+|---|---|
+| **Authentication** | Local account with Argon2id, session expiry, per-account lockout and per-IP rate limiting, forced rotation of the generated first-run password |
+| **Scope control** | Private IPv4 ranges you configure. Nothing outside them can be scanned or contacted, and loopback, link-local, multicast and public space are refused outright |
+| **Discovery** | nmap host and port scanning of a chosen subnet, producing an inventory with IP, MAC, vendor, hostname and open ports. Safely re-runnable — a second scan of the same range creates no duplicates |
+| **Inventory** | Sortable, searchable device list; device detail with open ports; your own name, type and notes, which a rescan never overwrites. Removal is a soft delete, so history survives |
+
+## Not built yet
+
+Planned for v0.1, in this order: **diagnostics** (ping, traceroute, DNS, TCP and
+HTTP checks from the device page), **actions** (allowlisted commands you define,
+run locally or over SSH, with typed parameter schemas), and the **audit log**
+that records every one of them with the acting user, client IP, redacted
+parameters, timing and output.
+
+Until those land this is an inventory tool, not the console described above.
 
 ## What it deliberately does not do
 
@@ -27,7 +41,9 @@ This is **privileged infrastructure software**. It holds credentials and runs co
 
 It is designed to run on a trusted management network, behind a reverse proxy that terminates TLS, and **never exposed directly to the internet**. The container binds `127.0.0.1` by default specifically so that a misconfiguration cannot silently publish an admin panel to your LAN.
 
-Design choices that follow from that: non-root container with all capabilities dropped except `CAP_NET_RAW`, read-only root filesystem, credentials encrypted at rest, strict SSH host key verification with an explicit human trust step, no free-form command input anywhere in the UI, and a single choke point through which every command execution passes.
+Design choices that follow from that, and which are in place now: a non-root container with all capabilities dropped except `CAP_NET_RAW`, a read-only root filesystem, no free-form command input anywhere in the UI, and a single choke point through which every command execution passes — no shell, argv arrays only, allowlisted binaries, hard timeouts, and process-group kills.
+
+Still to come with the features that need them: credentials encrypted at rest, and strict SSH host key verification with an explicit human trust step.
 
 Full threat model and vulnerability reporting: [SECURITY.md](SECURITY.md).
 
@@ -83,6 +99,7 @@ Only semver tags get `latest`. Builds from `main` are tagged `main` and `sha-<co
 | Document | Contents |
 |---|---|
 | [docs/INSTALL.md](docs/INSTALL.md) | Full install, reverse proxy setup, capability verification |
+| [docs/MANUAL_VERIFICATION.md](docs/MANUAL_VERIFICATION.md) | Checks that need a real network, which CI cannot perform |
 | [docs/UPGRADING.md](docs/UPGRADING.md) | Upgrade and rollback |
 | [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) | Consistent SQLite backup, key backup, restore drill |
 | [docs/ACTION_DEFINITIONS.md](docs/ACTION_DEFINITIONS.md) | Writing safe action definitions |

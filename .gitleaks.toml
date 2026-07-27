@@ -1,0 +1,21 @@
+# gitleaks configuration.
+#
+# gitleaks is the backstop for the one mistake this public repository cannot
+# take back: the runtime generates credential-encryption key material, and a
+# stray commit of it is unrecoverable once pushed. The default rules stay on.
+#
+# The allowlist below is deliberately narrow — a single file, not a pattern that
+# would also cover real code. Widening it defeats the point of having the check.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+Fixtures for the output-redaction tests. These are invented strings whose entire
+purpose is to look like credentials, because the code under test has to
+recognise and mask exactly this shape. There is nothing real here, and the
+alternative — obfuscating the fixtures so the scanner stops noticing — would
+weaken the tests to quiet a tool.
+"""
+paths = ['''^tests/unit/test_redaction\.py$''']

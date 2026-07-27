@@ -122,6 +122,11 @@ disallow_untyped_defs = false     # tightened to true at Phase 4 (see plan)
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+# Put the repo root on sys.path so `from tests.conftest import ...` resolves.
+# Without this it works locally purely as a side effect of the editable
+# install's path hook and fails in CI with ModuleNotFoundError: No module
+# named 'tests'.
+pythonpath = ["."]
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers --strict-config"
 markers = [

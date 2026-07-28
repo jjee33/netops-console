@@ -11,6 +11,7 @@ docs/MANUAL_VERIFICATION.md.
 
 from __future__ import annotations
 
+import asyncssh
 import httpx
 import pytest
 from sqlalchemy import func, select
@@ -22,15 +23,15 @@ from app.core.validation import ValidationError
 from app.models import Credential, Device, SshHostKey
 from app.modules.credentials import service
 
-# A throwaway key, generated for these tests and authorised nowhere.
-TEST_KEY = """-----BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-QyNTUxOQAAACDMU9TihLxc7pWIpEP22Yva+1kNYduPNG5kozYtztFAEQAAAKBUwrn+VMK5
-/gAAAAtzc2gtZWQyNTUxOQAAACDMU9TihLxc7pWIpEP22Yva+1kNYduPNG5kozYtztFAEQ
-AAAEC1UJdTWoexuQAZsNDmASLWdqAKb3yrkPBETA4PwguyosxT1OKEvFzulYikQ/bZi9r7
-WQ1h2480bmSjNi3O0UARAAAAGG5ldG9wcy10ZXN0LWZpeHR1cmUtb25seQECAwQF
------END OPENSSH PRIVATE KEY-----
-"""
+# Generated per test session rather than committed. A private key in a public
+# repository is a bad pattern even when it is authorised nowhere: it trips every
+# secret scanner for everyone who forks, and "this one is fine" is exactly the
+# habit that eventually commits one that is not.
+TEST_KEY: str = (
+    asyncssh.generate_private_key("ssh-ed25519", comment="netops-test-fixture")
+    .export_private_key("openssh")
+    .decode()
+)
 
 
 async def _device(ip: str = "10.0.30.5") -> int:

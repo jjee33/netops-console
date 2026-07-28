@@ -1,0 +1,27 @@
+{# Command output from an untrusted host. Autoescaped, rendered in <pre>. #}
+<div class="diag-result diag-{{ execution.status }}" id="action-result">
+  <div class="diag-header">
+    <div>
+      <strong>{{ execution.action_name_snapshot }}</strong>
+      <span class="muted">— {{ execution.device_label_snapshot }}</span>
+    </div>
+    <div class="diag-meta">
+      <span class="badge badge-diag-{{ execution.status }}">{{ execution.status }}</span>
+      {% if execution.duration_ms is not none %}<span class="muted">{{ execution.duration_ms }} ms</span>{% endif %}
+    </div>
+  </div>
+
+  {% if execution.command_preview %}
+  <p class="field-hint">Ran: <code>{{ execution.command_preview }}</code></p>
+  {% endif %}
+
+  {% if execution.stdout %}<pre class="output">{{ execution.stdout }}</pre>{% endif %}
+  {% if execution.stderr %}<pre class="output output-stderr">{{ execution.stderr }}</pre>{% endif %}
+  {% if not execution.stdout and not execution.stderr %}<p class="muted">(no output)</p>{% endif %}
+
+  <p class="field-hint">
+    Run by {{ execution.username_snapshot or 'unknown' }}
+    at {{ execution.started_at.strftime('%Y-%m-%d %H:%M:%S') if execution.started_at else '—' }} UTC.
+    {% if execution.exit_code is not none %}Exit code {{ execution.exit_code }}.{% endif %}
+  </p>
+</div>

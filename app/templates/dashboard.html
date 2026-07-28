@@ -24,7 +24,38 @@
     <span class="tile-value status-unknown">{{ stats.unknown }}</span>
     <span class="tile-label">Unknown</span>
   </div>
+  <div class="tile {% if stats.new %}tile-attention{% endif %}">
+    <span class="tile-value {% if stats.new %}status-new{% endif %}">{{ stats.new }}</span>
+    <span class="tile-label">New ({{ new_device_days }}d)</span>
+  </div>
 </section>
+
+{% if new_devices %}
+<section class="card card-attention">
+  <div class="page-header">
+    <h2>Appeared in the last {{ new_device_days }} days</h2>
+    <a href="/devices?new=1">See all &rarr;</a>
+  </div>
+  <p class="field-hint">
+    Devices seen for the first time in this window. Something you do not
+    recognise here is worth investigating &mdash; that is the point of this list.
+  </p>
+  <table class="data-table compact">
+    <thead><tr><th>First seen</th><th>IP address</th><th>Hostname</th><th>MAC</th><th>Vendor</th></tr></thead>
+    <tbody>
+      {% for device in new_devices %}
+      <tr>
+        <td class="muted nowrap">{{ device.first_seen.strftime('%Y-%m-%d %H:%M') if device.first_seen else '-' }}</td>
+        <td><a href="/devices/{{ device.id }}"><code>{{ device.ip_address }}</code></a></td>
+        <td>{{ device.hostname or '-' }}</td>
+        <td><code>{{ device.mac_address or '-' }}</code></td>
+        <td>{{ device.vendor or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
 
 {% if devices %}
 <section class="card">

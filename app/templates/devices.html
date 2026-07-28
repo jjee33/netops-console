@@ -3,14 +3,20 @@
 
 {% block content %}
 <div class="page-header">
-  <h1>Devices</h1>
+  <h1>Devices{% if show_new %} <span class="muted">&mdash; new in the last {{ new_device_days }} days</span>{% endif %}</h1>
   <a class="primary-link" href="/discovery">Run a scan</a>
 </div>
+
+<nav class="filter-tabs" aria-label="Filter devices">
+  <a href="/devices" class="{% if not show_new %}active{% endif %}">All devices</a>
+  <a href="/devices?new=1" class="{% if show_new %}active{% endif %}">New ({{ new_device_days }}d)</a>
+</nav>
 
 <form class="search-form" role="search"
       hx-get="/devices" hx-target="#device-table" hx-swap="outerHTML"
       hx-trigger="submit, keyup changed delay:300ms from:#q">
   <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="new" value="{% if show_new %}1{% endif %}">
   <input type="hidden" name="direction" value="{{ direction }}">
   <label class="visually-hidden" for="q">Search devices</label>
   <input id="q" name="q" type="text" value="{{ q }}" spellcheck="false"

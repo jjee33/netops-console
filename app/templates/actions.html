@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Actions — NetOps Console{% endblock %}
+
+{% block content %}
+<h1>Action library</h1>
+
+<p class="field-hint">
+  Commands you define once and run against devices. The browser sends an action
+  and its parameters, never a command — the server resolves what actually runs.
+</p>
+
+{% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
+
+<section class="card">
+  <h2>Defined actions</h2>
+  {% if definitions %}
+  <table class="data-table compact">
+    <thead>
+      <tr><th>Name</th><th>Type</th><th>Command</th><th>Applies to</th><th>State</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for definition in definitions %}
+      <tr>
+        <td>
+          {{ definition.name }}
+          {% if definition.confirmation_required %}<span class="badge badge-warning">confirm</span>{% endif %}
+          {% if definition.elevated_required %}<span class="badge badge-warning">sudo</span>{% endif %}
+          {% if definition.description %}<div class="muted">{{ definition.description }}</div>{% endif %}
+        </td>
+        <td>{{ definition.execution_type }}</td>
+        <td><code>{{ definition.argv_template | join(' ') }}</code></td>
+        <td class="muted">{{ definition.applicable_types | join(', ') or 'all devices' }}</td>
+        <td>
+          <span class="badge badge-{{ 'online' if definition.enabled else 'unknown' }}">
+            {{ 'enabled' if definition.enabled else 'disabled' }}
+          </span>
+        </td>
+        <td class="nowrap">
+          <form method="post" action="/actions/{{ definition.id }}/toggle" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="link-button">{{ 'Disable' if definition.enabled else 'Enable' }}</button>
+          </form>
+          <form method="post" action="/actions/{{ definition.id }}/delete" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="link-button danger-link">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="field-hint">Deleting an action keeps its execution history.</p>
+  {% else %}
+  <p class="muted">No actions defined yet.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Define an action</h2>
+
+  <form method="post" action="/actions" class="settings-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <label for="name">Name</label>
+    <input id="name" name="name" type="text" required maxlength="128"
+           value="{{ form.get('name', '') }}" placeholder="Show routing table">
+
+    <label for="description">Description</label>
+    <input id="description" name="description" type="text"
+           value="{{ form.get('description', '') }}"
+           placeholder="What this does, and what privilege it needs">
+
+    <label for="execution_type">Where it runs</label>
+    <select id="execution_type" name="execution_type">
+      <option value="local" {% if form.get('execution_type') != 'ssh' %}selected{% endif %}>
+        Local — inside this container
+      </option>
+      <option value="ssh" {% if form.get('execution_type') == 'ssh' %}selected{% endif %}>
+        SSH — on the device (not yet runnable)
+      </option>
+    </select>
+    <p class="field-hint">
+      Local actions run through an argv array with no shell, so parameters cannot
+      become extra arguments. SSH commands are handed to the remote login shell,
+      which is why every SSH parameter must carry a pattern.
+    </p>
+
+    <label for="argv_template">Command template</label>
+    <input id="argv_template" name="argv_template" type="text" required spellcheck="false"
+           value="{{ form.get('argv_template', '') }}"
+           placeholder='["ip", "route", "show"]'>
+    <p class="field-hint">
+      A JSON list of tokens. A parameter is written <code>{name}</code> and must be
+      a whole token on its own — <code>--name={x}</code> is refused, because that is
+      how one parameter becomes two arguments.
+    </p>
+
+    <label for="param_schema">Parameter schema</label>
+    <textarea id="param_schema" name="param_schema" rows="5" spellcheck="false"
+              placeholder='{"container": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,64}$"}}'>{{ form.get('param_schema', '') }}</textarea>
+    <p class="field-hint">
+      JSON. Each parameter may set <code>type</code> (string, integer, choice),
+      <code>pattern</code>, <code>choices</code>, <code>min</code>, <code>max</code>,
+      <code>required</code> and <code>secret</code>. A pattern matching everything
+      is refused — it looks like a constraint and is not.
+    </p>
+
+    <label for="timeout_seconds">Timeout (seconds)</label>
+    <input id="timeout_seconds" name="timeout_seconds" type="number" min="1" max="300"
+           value="{{ form.get('timeout_seconds', 30) }}" required>
+
+    <label for="applicable_types">Applies to device types</label>
+    <input id="applicable_types" name="applicable_types" type="text"
+           value="{{ form.get('applicable_types', '') }}" placeholder="switch, nas — blank for all">
+
+    <label class="checkbox">
+      <input type="checkbox" name="confirmation_required" value="1"> Ask before running
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="elevated_required" value="1"> Needs a sudoers entry on the target
+    </label>
+
+    <button type="submit" class="primary">Create action</button>
+  </form>
+</section>
+{% endblock %}

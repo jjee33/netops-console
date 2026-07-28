@@ -94,6 +94,43 @@
   <div id="diagnostic-result"></div>
 </section>
 
+{% if actions %}
+<section class="card">
+  <h2>Actions</h2>
+  <p class="field-hint">
+    Defined in the <a href="/actions">action library</a>. Parameters are validated
+    against each action's schema before anything runs.
+  </p>
+
+  <div class="diag-buttons">
+    {% for definition in actions %}
+    <form method="post" action="/devices/{{ device.id }}/actions/{{ definition.id }}"
+          hx-post="/devices/{{ device.id }}/actions/{{ definition.id }}"
+          hx-target="#action-result" hx-swap="outerHTML" hx-indicator="#action-spinner"
+          {% if definition.confirmation_required %}hx-confirm="Run &quot;{{ definition.name }}&quot; on {{ device.display_name }}?"{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      {% for param_name, param in definition.param_schema.items() %}
+      <label class="visually-hidden" for="{{ definition.id }}-{{ param_name }}">{{ param_name }}</label>
+      <input id="{{ definition.id }}-{{ param_name }}" name="{{ param_name }}"
+             type="{{ 'number' if param.get('type') == 'integer' else 'text' }}"
+             placeholder="{{ param_name }}" class="port-input"
+             {% if param.get('required', True) %}required{% endif %}>
+      {% endfor %}
+
+      <button type="submit" class="diag-button">{{ definition.name }}</button>
+      <span class="diag-desc">{{ definition.description or '' }}</span>
+    </form>
+    {% endfor %}
+  </div>
+
+  <div id="action-spinner" class="htmx-indicator">
+    <span class="spinner" aria-hidden="true"></span> Running…
+  </div>
+  <div id="action-result"></div>
+</section>
+{% endif %}
+
 <section class="card">
   <h2>Recent checks</h2>
   {% include "partials/diagnostic_history.html" %}

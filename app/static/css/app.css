@@ -468,3 +468,17 @@ button.destructive:hover { background: rgba(224,100,95,0.12); }
 .nowrap { white-space: nowrap; }
 .detail-cell { max-width: 26rem; font-size: 0.85rem; color: var(--text-muted); }
 .pager { margin-top: 1.5rem; }
+
+/* A device nobody recognises appearing on the LAN is worth a second look. */
+.status-new { color: var(--warn); }
+.tile-attention { border-color: var(--warn); }
+.card-attention { border-color: var(--warn); }
+
+.inline-form { display: inline; margin: 0; }
+.inline-form + .inline-form { margin-left: 0.75rem; }
+.danger-link { color: var(--err); }
+.output-stderr { border-color: var(--err); }
+select {
+  width: 100%; padding: 0.55rem 0.7rem; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius); font: inherit; font-size: 0.95rem;
+}

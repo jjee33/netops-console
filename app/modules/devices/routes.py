@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Form, Request, status
@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from app.core.requests import wants_partial
 from app.core.templating import render
 from app.models import Device, DevicePort, DiscoveryRun
+from app.modules.actions import service as actions_service
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.diagnostics import service as diagnostics_service
 from app.modules.settings import service as settings_service
@@ -31,6 +32,15 @@ SORTABLE = {
 }
 
 
+# A device first seen inside this window counts as new. Long enough to survive
+# a weekend away, short enough that the number stays meaningful.
+NEW_DEVICE_DAYS = 7
+
+
+def _new_since() -> datetime:
+    return datetime.now(UTC) - timedelta(days=NEW_DEVICE_DAYS)
+
+
 async def _stats(session: SessionDep) -> dict[str, int]:
     rows = await session.execute(
         select(Device.status, func.count())
@@ -38,11 +48,19 @@ async def _stats(session: SessionDep) -> dict[str, int]:
         .group_by(Device.status)
     )
     counts: dict[str, int] = {status: count for status, count in rows.all()}
+
+    new_count = await session.scalar(
+        select(func.count())
+        .select_from(Device)
+        .where(Device.is_deleted.is_(False), Device.first_seen >= _new_since())
+    )
+
     return {
         "total": sum(counts.values()),
         "online": counts.get("online", 0),
         "offline": counts.get("offline", 0),
         "unknown": counts.get("unknown", 0) + counts.get("warning", 0),
+        "new": new_count or 0,
     }
 
 
@@ -64,6 +82,17 @@ async def dashboard(request: Request, session: SessionDep, user: ActiveUser) -> 
         )
     )
 
+    # Listed, not just counted. "Three devices appeared this week" is a prompt
+    # to look; naming them is what makes it actionable.
+    new_devices = list(
+        await session.scalars(
+            select(Device)
+            .where(Device.is_deleted.is_(False), Device.first_seen >= _new_since())
+            .order_by(Device.first_seen.desc())
+            .limit(10)
+        )
+    )
+
     return render(
         request,
         "dashboard.html",
@@ -71,6 +100,8 @@ async def dashboard(request: Request, session: SessionDep, user: ActiveUser) -> 
             "stats": await _stats(session),
             "devices": recent,
             "runs": runs,
+            "new_devices": new_devices,
+            "new_device_days": NEW_DEVICE_DAYS,
             "allowed_cidrs": settings.allowed_cidrs,
         },
     )
@@ -84,11 +115,16 @@ async def device_list(
     q: str = "",
     sort: str = "ip",
     direction: str = "asc",
+    new: str = "",
 ) -> Response:
     column = SORTABLE.get(sort, Device.ip_address)
     ordering = column.desc() if direction == "desc" else column.asc()
 
     statement = select(Device).where(Device.is_deleted.is_(False))
+
+    show_new = new in ("1", "true", "yes")
+    if show_new:
+        statement = statement.where(Device.first_seen >= _new_since())
 
     if q.strip():
         # Bound parameters throughout — the search term is never concatenated
@@ -110,6 +146,8 @@ async def device_list(
         "sort": sort,
         "direction": direction,
         "next_direction": "desc" if direction == "asc" else "asc",
+        "show_new": show_new,
+        "new_device_days": NEW_DEVICE_DAYS,
     }
 
     if wants_partial(request):
@@ -139,6 +177,7 @@ async def device_detail(
             "ports": ports,
             "registry": diagnostics_service.REGISTRY,
             "history": await diagnostics_service.recent_for_device(session, device.id),
+            "actions": await actions_service.actions_for_device(session, device),
         },
     )
 

@@ -6,8 +6,9 @@ migration and a schema that silently drifts from the code.
 """
 
 from app.models.device import Device, DevicePort
+from app.models.diagnostic import DiagnosticResult
 from app.models.discovery import DiscoveryRun
 from app.models.setting import Setting
 from app.models.user import User
 
-__all__ = ["Device", "DevicePort", "DiscoveryRun", "Setting", "User"]
+__all__ = ["Device", "DevicePort", "DiagnosticResult", "DiscoveryRun", "Setting", "User"]

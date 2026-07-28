@@ -1,0 +1,35 @@
+{# Command output from an untrusted host. Escaped by Jinja's autoescaping and
+   rendered inside <pre> — never |safe, under any circumstances. #}
+<div class="diag-result diag-{{ result.status }}" id="diagnostic-result">
+  <div class="diag-header">
+    <div>
+      <strong>{{ spec.label if spec else result.type }}</strong>
+      <span class="muted">— {{ result.target }}</span>
+    </div>
+    <div class="diag-meta">
+      <span class="badge badge-diag-{{ result.status }}">{{ summary }}</span>
+      {% if result.duration_ms is not none %}
+      <span class="muted">{{ result.duration_ms }} ms</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if result.latency_ms is not none or result.packet_loss_pct is not none %}
+  <div class="diag-stats">
+    {% if result.latency_ms is not none %}
+    <span><strong>{{ '%.2f'|format(result.latency_ms) }}</strong> ms average</span>
+    {% endif %}
+    {% if result.packet_loss_pct is not none %}
+    <span><strong>{{ '%.0f'|format(result.packet_loss_pct) }}%</strong> packet loss</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <pre class="output">{{ result.output or '(no output)' }}</pre>
+
+  <p class="field-hint">
+    Run by {{ result.username_snapshot or 'unknown' }}
+    at {{ result.started_at.strftime('%Y-%m-%d %H:%M:%S') if result.started_at else '—' }} UTC.
+    {% if result.exit_code is not none %}Exit code {{ result.exit_code }}.{% endif %}
+  </p>
+</div>

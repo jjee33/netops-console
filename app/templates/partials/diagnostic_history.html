@@ -1,0 +1,20 @@
+{% if history %}
+<table class="data-table compact">
+  <thead>
+    <tr><th>When</th><th>Check</th><th>Target</th><th>Result</th><th>By</th></tr>
+  </thead>
+  <tbody>
+    {% for entry in history %}
+    <tr>
+      <td class="muted">{{ entry.started_at.strftime('%Y-%m-%d %H:%M') if entry.started_at else '—' }}</td>
+      <td>{{ registry[entry.type].label if entry.type in registry else entry.type }}</td>
+      <td><code>{{ entry.target }}</code></td>
+      <td><span class="badge badge-diag-{{ entry.status }}">{{ entry.status }}</span></td>
+      <td class="muted">{{ entry.username_snapshot or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Nothing run against this device yet.</p>
+{% endif %}

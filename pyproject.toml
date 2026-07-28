@@ -34,6 +34,7 @@ dependencies = [
     "cryptography>=44,<48",
     "asyncssh>=2.18,<3",
     "defusedxml>=0.7.1,<0.8",
+    "httpx>=0.28,<0.29",   # HTTP(S) device checks; also used by the test client
 ]
 
 [project.optional-dependencies]
@@ -41,7 +42,6 @@ dev = [
     "pytest>=8.3,<9",
     "pytest-asyncio>=0.24,<1.2",
     "pytest-cov>=6.0,<8",
-    "httpx>=0.28,<0.29",
     "ruff>=0.8,<0.15",
     "mypy>=1.13,<2",
     "pip-audit>=2.7,<3",

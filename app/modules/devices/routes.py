@@ -14,6 +14,7 @@ from app.core.requests import wants_partial
 from app.core.templating import render
 from app.models import Device, DevicePort, DiscoveryRun
 from app.modules.auth.dependencies import ActiveUser, SessionDep
+from app.modules.diagnostics import service as diagnostics_service
 from app.modules.settings import service as settings_service
 
 logger = logging.getLogger("netops.devices")
@@ -130,7 +131,16 @@ async def device_detail(
         )
     )
 
-    return render(request, "device_detail.html", {"device": device, "ports": ports})
+    return render(
+        request,
+        "device_detail.html",
+        {
+            "device": device,
+            "ports": ports,
+            "registry": diagnostics_service.REGISTRY,
+            "history": await diagnostics_service.recent_for_device(session, device.id),
+        },
+    )
 
 
 @router.post("/devices/{device_id}")

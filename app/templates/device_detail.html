@@ -57,6 +57,49 @@
 </section>
 
 <section class="card">
+  <h2>Diagnostics</h2>
+  <p class="field-hint">
+    Each of these runs a fixed command against <code>{{ device.ip_address }}</code>.
+    There is no free-form input — the browser sends which check to run, never a command.
+  </p>
+
+  <div class="diag-buttons">
+    {% for key, spec in registry.items() %}
+    <form method="post" action="/devices/{{ device.id }}/diagnostics/{{ key }}"
+          hx-post="/devices/{{ device.id }}/diagnostics/{{ key }}"
+          hx-target="#diagnostic-result" hx-swap="outerHTML"
+          hx-indicator="#diag-spinner"
+          {% if spec.confirm %}hx-confirm="{{ spec.detail }} Continue?"{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      {% if spec.needs_port %}
+      <label class="visually-hidden" for="port-{{ key }}">Port for {{ spec.label }}</label>
+      <input id="port-{{ key }}" name="port" type="number" min="1" max="65535"
+             value="{{ 443 if key == 'http_check' else 22 }}" class="port-input">
+      {% endif %}
+
+      <button type="submit" class="diag-button" title="{{ spec.detail }}">
+        {{ spec.label }}
+      </button>
+      <span class="diag-desc">{{ spec.description }}</span>
+    </form>
+    {% endfor %}
+  </div>
+
+  <div id="diag-spinner" class="htmx-indicator">
+    <span class="spinner" aria-hidden="true"></span> Running…
+  </div>
+
+  {# Swap target. Replaced wholesale by each result. #}
+  <div id="diagnostic-result"></div>
+</section>
+
+<section class="card">
+  <h2>Recent checks</h2>
+  {% include "partials/diagnostic_history.html" %}
+</section>
+
+<section class="card">
   <h2>Edit</h2>
   <form method="post" action="/devices/{{ device.id }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

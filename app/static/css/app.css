@@ -457,3 +457,14 @@ button.destructive:hover { background: rgba(224,100,95,0.12); }
 /* HTMX toggles this while a request is in flight. */
 .htmx-indicator { display: none; margin-top: 0.75rem; color: var(--text-muted); font-size: 0.9rem; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: block; }
+
+/* ---------- audit ---------- */
+
+.filter-tabs { display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+.filter-tabs a { padding: 0.4rem 0.2rem; color: var(--text-muted); border-bottom: 2px solid transparent; }
+.filter-tabs a.active { color: var(--text); border-bottom-color: var(--accent); }
+.filter-tabs a:hover { text-decoration: none; color: var(--accent); }
+
+.nowrap { white-space: nowrap; }
+.detail-cell { max-width: 26rem; font-size: 0.85rem; color: var(--text-muted); }
+.pager { margin-top: 1.5rem; }

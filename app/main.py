@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.core.db import dispose_engine
 from app.core.middleware import CSRFMiddleware, SecurityHeadersMiddleware
 from app.core.session import ABSOLUTE_LIFETIME
+from app.modules.audit.routes import router as audit_router
 from app.modules.auth.dependencies import MustChangePassword, RedirectToLogin, redirect_to_login
 from app.modules.auth.routes import router as auth_router
 from app.modules.devices.routes import router as devices_router
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    app.include_router(audit_router)
     app.include_router(auth_router)
     app.include_router(devices_router)
     app.include_router(diagnostics_router)

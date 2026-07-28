@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Audit log — NetOps Console{% endblock %}
+
+{% block content %}
+<h1>Audit log</h1>
+
+<p class="field-hint">
+  Everything this instance has done, newest first — including attempts that were
+  refused. A refusal is as much a record as a result.
+</p>
+
+<nav class="filter-tabs" aria-label="Filter by type">
+  <a href="/audit" class="{% if not kind %}active{% endif %}">All</a>
+  <a href="/audit?kind=diagnostic" class="{% if kind == 'diagnostic' %}active{% endif %}">Diagnostics</a>
+  <a href="/audit?kind=discovery" class="{% if kind == 'discovery' %}active{% endif %}">Discovery</a>
+</nav>
+
+{% if entries %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>When (UTC)</th><th>Action</th><th>Target</th>
+      <th>Result</th><th>Detail</th><th>By</th><th>From</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in entries %}
+    <tr>
+      <td class="muted nowrap">{{ entry.when.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+      <td>
+        {% if entry.link %}<a href="{{ entry.link }}">{{ entry.action }}</a>
+        {% else %}{{ entry.action }}{% endif %}
+      </td>
+      <td><code>{{ entry.target }}</code></td>
+      <td><span class="badge badge-diag-{{ entry.status }}">{{ entry.status }}</span></td>
+      {# Detail can contain a validation message quoting operator input. #}
+      <td class="detail-cell">{{ entry.detail }}</td>
+      <td class="muted">{{ entry.username or 'system' }}</td>
+      <td class="muted"><code>{{ entry.client_ip or '—' }}</code></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if has_more and next_cursor %}
+<p class="pager">
+  <a class="primary-link"
+     href="/audit?before={{ next_cursor }}{% if kind %}&kind={{ kind }}{% endif %}">
+    Older entries →
+  </a>
+</p>
+{% endif %}
+{% else %}
+<div class="empty-state">
+  <h2>Nothing recorded yet</h2>
+  <p>Run a discovery scan or a diagnostic and it will appear here.</p>
+</div>
+{% endif %}
+{% endblock %}

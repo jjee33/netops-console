@@ -10,6 +10,56 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.3] — 2026-07-27
+
+Diagnostics, the audit log, and three correctness fixes in shipped behaviour.
+
+### Added
+- **Diagnostics** from the device page: ping, traceroute, DNS, reverse DNS, TCP
+  port test, service scan, ARP entry, and HTTP check. Argv builders are
+  hardcoded and take at most two bounded numbers, which keeps this the safest
+  execution surface in the application — there is no path by which user text
+  becomes a flag, and no free-form command input anywhere in the UI.
+- **Audit log** covering diagnostics and discovery runs in one timeline,
+  filterable and keyset-paginated. Refusals are recorded and shown alongside
+  successes; a log of only what worked hides the entries someone goes looking
+  for. Rows carry denormalised device and user labels so they survive deletion
+  of either.
+- **Retention pruning** of diagnostic history, run after execution — the path
+  that creates the volume is the one that pays for cleaning it up.
+- Ping results update the device's rolling latency and reachability, so a
+  successful ping corrects an inventory entry a stale scan left wrong.
+
+### Security
+- Diagnostic targets are re-validated against current settings rather than
+  trusted because discovery found them. Narrowing the allowed ranges now stops
+  a device being contactable, instead of leaving the inventory as a way to keep
+  reaching hosts put out of scope.
+- The HTTP check resolves its target and validates the **resolved address**,
+  then pins the connection to it. Validating a name proves nothing when the
+  address is what gets connected to. Every resolved address must pass, so a
+  round-robin name cannot become reachable by retrying, and redirects are not
+  followed.
+
+### Fixed
+- `compose.yaml` defaulted to `:latest`, which is only published from a stable
+  tag and therefore does not exist yet — the README quickstart could not pull an
+  image. Now pinned to the current prerelease.
+- Devices were set online at discovery and never written again, so the Offline
+  tile read zero permanently and a device absent for a month still showed as
+  online. Absence is now inferred from `last_seen` within the scanned range;
+  nmap generally omits non-responding hosts, so trusting it to report them
+  would have meant nothing was ever marked offline.
+- A scan interrupted by a restart left its run on `running` forever and the
+  Discovery page polled a spinner indefinitely. Interrupted runs are closed at
+  startup.
+- The scan form defaulted to the first allowed range — normally a supernet far
+  above the host cap — so the first thing an operator saw was a validation error
+  on a field they had not touched. It now suggests networks the container is
+  actually attached to that pass both checks.
+- `NETOPS_ALLOWED_CIDRS` in the documented comma-separated form raised
+  `SettingsError` at startup and crash-looped the container.
+
 ## [0.1.0-alpha.2] — 2026-07-27
 
 Discovery and device inventory.
@@ -100,7 +150,8 @@ Delivery pipeline and container foundation. No usable application.
   asserts capabilities, the non-root UID, loopback-only binding, and SQLite pragmas.
 - Release pipeline publishing signed multi-arch images with SBOM and provenance.
 
-[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.2...HEAD
+[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.3...HEAD
+[0.1.0-alpha.3]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.0...v0.1.0-alpha.1
 [0.1.0-alpha.0]: https://github.com/jjee33/netops-console/releases/tag/v0.1.0-alpha.0

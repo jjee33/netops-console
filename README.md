@@ -8,7 +8,7 @@ That is the goal. Discovery and inventory work today; diagnostics, actions and t
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Image](https://img.shields.io/badge/ghcr.io-netops--console-blue?logo=docker)](https://github.com/jjee33/netops-console/pkgs/container/netops-console)
 
-> **Status: pre-release (`v0.1.0-alpha.2`).** Usable but incomplete — see the table below for what actually works today. The schema may change between alpha tags without a migration path. Watch the repo for the v0.1.0 release.
+> **Status: pre-release (`v0.1.0-alpha.3`).** Usable but incomplete — see the table below for what actually works today. The schema may change between alpha tags without a migration path. Watch the repo for the v0.1.0 release.
 
 ---
 
@@ -20,16 +20,15 @@ That is the goal. Discovery and inventory work today; diagnostics, actions and t
 | **Scope control** | Private IPv4 ranges you configure. Nothing outside them can be scanned or contacted, and loopback, link-local, multicast and public space are refused outright |
 | **Discovery** | nmap host and port scanning of a chosen subnet, producing an inventory with IP, MAC, vendor, hostname and open ports. Safely re-runnable — a second scan of the same range creates no duplicates |
 | **Inventory** | Sortable, searchable device list; device detail with open ports; your own name, type and notes, which a rescan never overwrites. Removal is a soft delete, so history survives |
+| **Diagnostics** | Ping, traceroute, DNS, reverse DNS, TCP port test, service scan, ARP entry and HTTP check, from the device page. No free-form command input anywhere — the browser sends which check to run, never a command |
+| **Audit log** | Every diagnostic and discovery run, with the acting user, client IP, timing and outcome. Refusals are recorded too. History survives deleting the device or the account |
 
 ## Not built yet
 
-Planned for v0.1, in this order: **diagnostics** (ping, traceroute, DNS, TCP and
-HTTP checks from the device page), **actions** (allowlisted commands you define,
-run locally or over SSH, with typed parameter schemas), and the **audit log**
-that records every one of them with the acting user, client IP, redacted
-parameters, timing and output.
-
-Until those land this is an inventory tool, not the console described above.
+**Actions** — allowlisted commands you define, run locally or over SSH with
+typed parameter schemas, an encrypted credential store, and strict SSH host key
+verification with an explicit human trust step. That is the remaining work for
+v0.1.
 
 ## What it deliberately does not do
 

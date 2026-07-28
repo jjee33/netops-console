@@ -132,6 +132,80 @@
 {% endif %}
 
 <section class="card">
+  <h2>SSH access</h2>
+
+  <h3>Device identity</h3>
+  {% if host_keys %}
+  <dl class="facts">
+    {% for record in host_keys %}
+    <dt>{{ record.key_type }}</dt>
+    <dd>
+      <code>{{ record.fingerprint }}</code>
+      <div class="muted">
+        trusted {{ record.trusted_at.strftime('%Y-%m-%d %H:%M') if record.trusted_at else '' }}
+        by {{ record.trusted_by_snapshot or 'unknown' }}
+      </div>
+    </dd>
+    {% endfor %}
+  </dl>
+  <form method="post" action="/devices/{{ device.id }}/hostkey/revoke" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="link-button danger-link">Forget this key</button>
+  </form>
+  <p class="field-hint">
+    Forget it only if the device was genuinely rebuilt. The next connection then
+    goes back through review rather than being accepted silently.
+  </p>
+  {% else %}
+  <p class="muted">
+    This device's identity has not been verified, so SSH actions will not run
+    against it.
+  </p>
+  <form method="post" action="/devices/{{ device.id }}/hostkey/probe"
+        hx-post="/devices/{{ device.id }}/hostkey/probe"
+        hx-target="#host-key-review" hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="diag-button">Read its host key</button>
+  </form>
+  <div id="host-key-review"></div>
+  {% endif %}
+
+  <h3>Credentials</h3>
+  {% if assigned_credentials %}
+  <ul class="cidr-list">
+    {% for credential in assigned_credentials %}
+    <li>
+      <code>{{ credential.name }}</code> ({{ credential.username }})
+      <form method="post" action="/devices/{{ device.id }}/credentials" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="credential_id" value="{{ credential.id }}">
+        <input type="hidden" name="unassign" value="1">
+        <button type="submit" class="link-button danger-link">unassign</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No credential assigned.</p>
+  {% endif %}
+
+  {% if all_credentials %}
+  <form method="post" action="/devices/{{ device.id }}/credentials">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label for="credential_id">Assign a credential</label>
+    <select id="credential_id" name="credential_id">
+      {% for credential in all_credentials %}
+      <option value="{{ credential.id }}">{{ credential.name }} ({{ credential.username }})</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="diag-button">Assign</button>
+  </form>
+  {% else %}
+  <p class="field-hint">No credentials stored yet — add one under <a href="/credentials">Credentials</a>.</p>
+  {% endif %}
+</section>
+
+<section class="card">
   <h2>Recent checks</h2>
   {% include "partials/diagnostic_history.html" %}
 </section>

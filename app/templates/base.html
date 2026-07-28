@@ -22,6 +22,7 @@
     <a href="/devices" {% if request.url.path.startswith('/devices') %}class="active"{% endif %}>Devices</a>
     <a href="/discovery" {% if request.url.path.startswith('/discovery') %}class="active"{% endif %}>Discovery</a>
     <a href="/actions" {% if request.url.path.startswith('/actions') %}class="active"{% endif %}>Actions</a>
+    <a href="/credentials" {% if request.url.path.startswith('/credentials') %}class="active"{% endif %}>Credentials</a>
     <a href="/audit" {% if request.url.path.startswith('/audit') %}class="active"{% endif %}>Audit</a>
     <a href="/settings" {% if request.url.path == '/settings' %}class="active"{% endif %}>Settings</a>
   </nav>

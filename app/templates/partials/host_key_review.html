@@ -1,0 +1,28 @@
+<div id="host-key-review" class="diag-result {{ 'diag-rejected' if error else 'diag-timeout' }}">
+  {% if error %}
+  <p class="alert alert-error" role="alert">{{ error }}</p>
+  {% endif %}
+
+  {% if key %}
+  <h3>Review this device's identity</h3>
+  <dl class="facts">
+    <dt>Key type</dt><dd><code>{{ key.key_type }}</code></dd>
+    <dt>Fingerprint</dt><dd><code>{{ key.fingerprint }}</code></dd>
+  </dl>
+
+  <p class="field-hint">
+    Compare this against the device itself — on most Linux hosts,
+    <code>ssh-keygen -lf /etc/ssh/ssh_host_{{ key.key_type.replace('ssh-', '') }}_key.pub</code>.
+    Accepting a fingerprint you have not checked is trusting whatever answered
+    the address.
+  </p>
+
+  <form method="post" action="/devices/{{ device.id }}/hostkey/trust">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="key_type" value="{{ key.key_type }}">
+    <input type="hidden" name="key_base64" value="{{ key.key_base64 }}">
+    <input type="hidden" name="fingerprint" value="{{ key.fingerprint }}">
+    <button type="submit" class="diag-button">I have verified this fingerprint — trust it</button>
+  </form>
+  {% endif %}
+</div>

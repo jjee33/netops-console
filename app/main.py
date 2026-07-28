@@ -28,6 +28,7 @@ from app.modules.actions.routes import router as actions_router
 from app.modules.audit.routes import router as audit_router
 from app.modules.auth.dependencies import MustChangePassword, RedirectToLogin, redirect_to_login
 from app.modules.auth.routes import router as auth_router
+from app.modules.credentials.routes import router as credentials_router
 from app.modules.devices.routes import router as devices_router
 from app.modules.diagnostics.routes import router as diagnostics_router
 from app.modules.discovery.routes import router as discovery_router
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
 
     app.include_router(actions_router)
     app.include_router(audit_router)
+    app.include_router(credentials_router)
     app.include_router(auth_router)
     app.include_router(devices_router)
     app.include_router(diagnostics_router)

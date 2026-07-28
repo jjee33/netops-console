@@ -1,11 +1,20 @@
 """Defining and running actions.
 
-Local actions only in this pass. The SSH path exists in
-:mod:`app.modules.actions.schema` (patterns are already mandatory, and
-``build_ssh_command`` quotes) but dispatch is deliberately refused here until
-the credential store and host key verification are built — an SSH action that
-runs before strict host key checking exists is exactly the shortcut that becomes
-permanent.
+Two execution paths with genuinely different security properties.
+
+**Local.** argv arrays, no shell. A parameter containing shell metacharacters is
+passed to the program as one literal string, so validation is defence in depth
+rather than the only thing standing between a parameter and execution.
+
+**SSH.** sshd receives a single command string and hands it to the target user's
+login shell. Argv discipline buys nothing there. What protects the target is, in
+order: the mandatory per-parameter pattern, ``shlex.quote`` on every substituted
+value, and — the only one that survives a compromise of *this* application — an
+``authorized_keys`` ``command="..."`` restriction on the device itself.
+
+An SSH action will not run against a device whose host key has not been
+explicitly trusted by a human. That check happens before the credential is
+decrypted, let alone offered.
 """
 
 from __future__ import annotations
@@ -140,13 +149,8 @@ async def execute(
         _validate_target(device, allowed)
 
         if definition.execution_type == "ssh":
-            # Refused rather than half-implemented. Running remote commands
-            # before strict host key verification exists would mean shipping the
-            # insecure path first and retrofitting the check afterwards.
-            raise ValidationError(
-                "SSH actions are not available yet — the encrypted credential store "
-                "and host key verification are still being built. This action is "
-                "saved and validated, but will not run."
+            return await _execute_ssh(
+                session, execution, definition, device, specs, values, started
             )
 
         argv = schema.build_argv(definition.argv_template, specs, values)
@@ -180,6 +184,77 @@ async def execute(
         stdout=result.stdout,
         stderr=result.stderr,
         exit_code=result.exit_code,
+        started=started,
+    )
+
+
+async def _execute_ssh(
+    session: AsyncSession,
+    execution: ActionExecution,
+    definition: ActionDefinition,
+    device: Device,
+    specs: dict[str, schema.ParamSpec],
+    values: dict[str, Any],
+    started: datetime,
+) -> ActionExecution:
+    """Run an action over SSH, refusing anything unverified.
+
+    Order matters here and is the point of the function: host key first, then
+    credential, then command. A device we cannot identify never sees a key.
+    """
+    from app.modules.credentials import service as credentials_service
+    from app.modules.ssh import client as ssh_client
+
+    credentials = await credentials_service.for_device(session, device.id)
+    if not credentials:
+        return await _finish(
+            session,
+            execution,
+            "rejected",
+            stderr=(
+                "No credential is assigned to this device. Assign one on the device "
+                "page before running SSH actions against it."
+            ),
+            started=started,
+        )
+    credential = credentials[0]
+
+    trusted = await credentials_service.trusted_key_for(session, device.id)
+
+    # Built after the checks above so a rejected run still records what would
+    # have been sent, with secrets already masked.
+    command = schema.build_ssh_command(definition.argv_template, specs, values)
+    execution.command_preview = command
+
+    try:
+        result = await ssh_client.run_command(
+            device.ip_address,
+            command,
+            username=credential.username,
+            auth_type=credential.auth_type,
+            secret_ciphertext=credential.secret_ciphertext,
+            passphrase_ciphertext=credential.passphrase_ciphertext,
+            trusted_key=trusted,
+            timeout=float(definition.timeout_seconds),
+        )
+    except ssh_client.UnknownHostKey as exc:
+        logger.warning("ssh action refused: unverified host key for device %s", device.id)
+        return await _finish(session, execution, "rejected", stderr=str(exc), started=started)
+    except ssh_client.HostKeyChanged as exc:
+        logger.error("ssh action refused: host key changed for device %s", device.id)
+        return await _finish(session, execution, "rejected", stderr=str(exc), started=started)
+    except ssh_client.SshError as exc:
+        return await _finish(session, execution, "failed", stderr=str(exc), started=started)
+
+    credential.last_used_at = datetime.now(UTC)
+
+    return await _finish(
+        session,
+        execution,
+        "success" if result.exit_status == 0 else "failed",
+        stdout=result.stdout,
+        stderr=result.stderr,
+        exit_code=result.exit_status,
         started=started,
     )
 

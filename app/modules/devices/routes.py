@@ -15,6 +15,7 @@ from app.core.templating import render
 from app.models import Device, DevicePort, DiscoveryRun
 from app.modules.actions import service as actions_service
 from app.modules.auth.dependencies import ActiveUser, SessionDep
+from app.modules.credentials import service as credentials_service
 from app.modules.diagnostics import service as diagnostics_service
 from app.modules.settings import service as settings_service
 
@@ -178,6 +179,9 @@ async def device_detail(
             "registry": diagnostics_service.REGISTRY,
             "history": await diagnostics_service.recent_for_device(session, device.id),
             "actions": await actions_service.actions_for_device(session, device),
+            "assigned_credentials": await credentials_service.for_device(session, device.id),
+            "all_credentials": await credentials_service.list_all(session),
+            "host_keys": await credentials_service.host_keys_for(session, device.id),
         },
     )
 

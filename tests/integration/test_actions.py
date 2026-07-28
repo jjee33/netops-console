@@ -193,11 +193,12 @@ class TestExecution:
         assert executions[0].status == "rejected"
         assert "outside the currently allowed ranges" in (executions[0].stderr or "")
 
-    async def test_ssh_actions_are_refused_rather_than_half_run(
+    async def test_ssh_actions_are_refused_without_an_assigned_credential(
         self, auth_client: httpx.AsyncClient
     ) -> None:
-        """Running remote commands before host key verification exists would be
-        shipping the insecure path first and retrofitting the check."""
+        """The gate before the gate. A device with no credential cannot be
+        reached at all, so the host key check is never even the thing that
+        stops it."""
         await _allow(auth_client)
         assert (
             await _define(
@@ -219,7 +220,7 @@ class TestExecution:
 
         executions = await _executions()
         assert executions[0].status == "rejected"
-        assert "not available yet" in (executions[0].stderr or "")
+        assert "No credential is assigned" in (executions[0].stderr or "")
 
     async def test_a_disabled_action_does_not_run(self, auth_client: httpx.AsyncClient) -> None:
         await _allow(auth_client)

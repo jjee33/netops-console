@@ -6,6 +6,7 @@ migration and a schema that silently drifts from the code.
 """
 
 from app.models.action import ActionDefinition, ActionExecution
+from app.models.credential import Credential, DeviceCredential, SshHostKey
 from app.models.device import Device, DevicePort
 from app.models.diagnostic import DiagnosticResult
 from app.models.discovery import DiscoveryRun
@@ -15,10 +16,13 @@ from app.models.user import User
 __all__ = [
     "ActionDefinition",
     "ActionExecution",
+    "Credential",
     "Device",
+    "DeviceCredential",
     "DevicePort",
     "DiagnosticResult",
     "DiscoveryRun",
     "Setting",
+    "SshHostKey",
     "User",
 ]

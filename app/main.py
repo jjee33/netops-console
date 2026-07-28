@@ -39,6 +39,19 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     logger.info("netops-console %s starting (db=%s)", __version__, settings.db_path)
+
+    # Scans are in-process background tasks, so a restart kills them without
+    # writing a terminal status and the UI polls a spinner forever.
+    try:
+        from app.core.db import get_session_factory
+        from app.modules.discovery.service import fail_interrupted_runs
+
+        async with get_session_factory()() as session:
+            await fail_interrupted_runs(session)
+    except Exception:
+        # Never let housekeeping stop the application from starting.
+        logger.exception("could not reconcile interrupted discovery runs")
+
     try:
         yield
     finally:

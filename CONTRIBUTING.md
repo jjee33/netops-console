@@ -75,3 +75,5 @@ Conventional-ish commit subjects (`feat:`, `fix:`, `docs:`, `ci:`, `refactor:`, 
 2. Commit, then tag: `git tag -a v0.1.0 -m 'v0.1.0' && git push --tags`.
 3. `release.yml` builds `linux/amd64` and `linux/arm64` on native runners, pushes by digest, merges the manifest, attaches SBOM and provenance, signs with cosign, and creates the GitHub release. The workflow fails if the tag and `pyproject.toml` version disagree.
 4. Pre-release tags (`v0.1.0-alpha.1`) publish that exact tag only — no `latest`, no floating `0.1` or `0` tags.
+5. Bump the pinned default in `compose.yaml` to the tag you just published. It is pinned rather than tracking `latest` because `latest` does not exist until a stable release, and a `compose.yaml` pointing at a tag that 404s breaks the quickstart for everyone.
+6. **At v0.1.0**: change that default back to `${NETOPS_VERSION:-latest}` — from then on `latest` exists and tracking it is correct.

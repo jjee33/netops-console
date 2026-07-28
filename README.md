@@ -92,7 +92,7 @@ cosign verify ghcr.io/jjee33/netops-console:v0.1.0 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-Only semver tags get `latest`. Builds from `main` are tagged `main` and `sha-<commit>` and are not release candidates.
+Only stable semver tags get `latest`, so during the prerelease series it does not exist yet and `compose.yaml` pins an explicit version. Builds from `main` are tagged `main` and `sha-<commit>` and are not release candidates.
 
 ## Documentation
 

@@ -161,6 +161,36 @@ async def mark_failed(session: AsyncSession, run: DiscoveryRun, summary: str) ->
     return await _finish(session, run, "failed", summary=summary)
 
 
+async def fail_interrupted_runs(session: AsyncSession) -> int:
+    """Close out runs left mid-flight by a restart. Call once at startup.
+
+    Scans run as in-process background tasks, so a restart kills them without
+    ever writing a terminal status. The row stays on ``running`` forever and the
+    Discovery page polls a spinner indefinitely — the application looks hung
+    when it is simply showing a scan that no longer exists.
+
+    Safe to mark all of them: the application enforces a single worker, so at
+    the moment this runs no scan can legitimately be in progress.
+    """
+    stranded = list(
+        await session.scalars(select(DiscoveryRun).where(DiscoveryRun.status == "running"))
+    )
+    if not stranded:
+        return 0
+
+    for run in stranded:
+        run.status = "failed"
+        run.completed_at = datetime.now(UTC)
+        run.output_summary = (
+            "Interrupted — the application restarted while this scan was running. "
+            "No results were recorded. Run it again if you still need it."
+        )
+
+    await session.commit()
+    logger.warning("closed %d discovery run(s) interrupted by a restart", len(stranded))
+    return len(stranded)
+
+
 async def execute_run(
     session: AsyncSession,
     run: DiscoveryRun,
@@ -179,6 +209,10 @@ async def execute_run(
         return await _finish(session, run, "rejected", summary=str(exc))
 
     run.subnet = str(network)
+
+    # Taken before the scan starts: any device in this range whose last_seen is
+    # older than this did not answer, and is therefore absent.
+    scanned_at = datetime.now(UTC)
 
     try:
         result = await get_engine().run(
@@ -207,7 +241,7 @@ async def execute_run(
         logger.error("discovery parse failed: %s", detail)
         return await _finish(session, run, "failed", summary=detail[:2000])
 
-    found, created = await reconcile(session, scan)
+    found, created = await reconcile(session, scan, network, scanned_at)
 
     return await _finish(
         session,
@@ -220,15 +254,71 @@ async def execute_run(
     )
 
 
-async def reconcile(session: AsyncSession, scan: ParsedScan) -> tuple[int, int]:
-    """Merge scan results into the inventory. Returns (found, newly created)."""
+async def reconcile(
+    session: AsyncSession,
+    scan: ParsedScan,
+    network: ipaddress.IPv4Network | None = None,
+    scanned_at: datetime | None = None,
+) -> tuple[int, int]:
+    """Merge scan results into the inventory. Returns (found, newly created).
+
+    Pass ``network`` and ``scanned_at`` to also mark absences — see
+    :func:`mark_absent_devices_offline`. Without them this only records what
+    responded, which leaves every device that has ever been seen reading as
+    online forever.
+    """
     created = 0
     for host in scan.up_hosts:
         _, is_new = await upsert_device(session, host)
         if is_new:
             created += 1
+
+    if network is not None and scanned_at is not None:
+        await mark_absent_devices_offline(session, network, scanned_at)
+
     await session.commit()
     return len(scan.up_hosts), created
+
+
+async def mark_absent_devices_offline(
+    session: AsyncSession, network: ipaddress.IPv4Network, scanned_at: datetime
+) -> int:
+    """Mark devices inside a scanned range that did not answer.
+
+    Absence is inferred from ``last_seen`` rather than from nmap reporting a
+    host as down. nmap generally omits non-responding hosts from its output
+    entirely, so trusting it to tell us what is missing would mean nothing is
+    ever marked offline — which is precisely the bug this exists to fix.
+
+    Scoped to the range that was actually scanned. A device on a subnet nobody
+    scanned this time has not been shown to be absent, and saying it is offline
+    would be a guess presented as a fact.
+    """
+    candidates = await session.scalars(
+        select(Device).where(Device.is_deleted.is_(False), Device.status != "offline")
+    )
+
+    changed = 0
+    for device in candidates:
+        try:
+            address = ipaddress.ip_address(device.ip_address)
+        except ValueError:  # pragma: no cover - defensive
+            continue
+        if address not in network:
+            continue
+
+        last_seen = device.last_seen
+        if last_seen is not None and last_seen.tzinfo is None:
+            # SQLite returns naive datetimes even for timezone-aware columns.
+            last_seen = last_seen.replace(tzinfo=UTC)
+
+        if last_seen is None or last_seen < scanned_at:
+            device.status = "offline"
+            changed += 1
+
+    if changed:
+        logger.info("marked %d device(s) offline in %s", changed, network)
+    return changed
 
 
 async def upsert_device(session: AsyncSession, host: ParsedHost) -> tuple[Device, bool]:

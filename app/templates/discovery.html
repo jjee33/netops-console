@@ -15,14 +15,32 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
     <label for="subnet">Subnet</label>
+    {# Prefilled from a detected local network, never from allowed_cidrs. An
+       allowed range is typically a supernet such as 10.0.0.0/8, so using it as
+       the default guaranteed the form failed the host cap before the operator
+       typed anything. #}
     <input id="subnet" name="subnet" type="text" required spellcheck="false"
            placeholder="e.g. 192.168.1.0/24"
-           value="{{ settings.allowed_cidrs[0] if settings.allowed_cidrs else '' }}">
+           value="{{ subnet or (suggestions[0] if suggestions else '') }}">
+
+    {% if suggestions %}
+    <p class="field-hint">
+      Detected on this host:
+      {% for candidate in suggestions %}
+      <button type="button" class="chip" data-subnet="{{ candidate }}">{{ candidate }}</button>
+      {% endfor %}
+    </p>
+    {% endif %}
+
     <p class="field-hint">
       Must sit inside your allowed ranges and cover no more than
-      {{ settings.max_scan_hosts }} addresses.
+      {{ settings.max_scan_hosts }} addresses — roughly a /22.
       {% if settings.allowed_cidrs %}
       Allowed: {% for cidr in settings.allowed_cidrs %}<code>{{ cidr }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+      {% if not suggestions %}
+      These are usually too large to scan whole; pick a /24 inside one, such as
+      <code>10.0.10.0/24</code>.
+      {% endif %}
       {% else %}
       <strong>No ranges are configured yet</strong> — set them in
       <a href="/settings">Settings</a> first.

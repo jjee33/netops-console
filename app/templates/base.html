@@ -8,6 +8,7 @@
   <link rel="icon" href="data:,">
   {# CSP forbids inline script, so HTMX is vendored rather than loaded from a CDN. #}
   <script src="/static/js/htmx.min.js" defer></script>
+  <script src="/static/js/app.js" defer></script>
 </head>
 {# hx-headers puts the CSRF token on every HTMX request. Forms carry it as a
    hidden field instead; both paths are checked by the same middleware. #}

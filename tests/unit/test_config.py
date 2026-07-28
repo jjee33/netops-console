@@ -57,3 +57,39 @@ def test_empty_key_file_is_rejected(tmp_path) -> None:
     settings = Settings(crypto_key_file=path)
     with pytest.raises(RuntimeError, match="empty"):
         settings.read_crypto_key()
+
+
+class TestEnvironmentParsing:
+    """Settings must accept the formats documented in .env.example.
+
+    These exist because a mismatch here is not a validation error the operator
+    can see and correct — pydantic-settings raises before the app starts, so the
+    container crash-loops with a traceback and no UI.
+    """
+
+    def test_allowed_cidrs_accepts_the_documented_comma_separated_form(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("NETOPS_ALLOWED_CIDRS", "10.0.0.0/8,192.168.0.0/16")
+        assert Settings().allowed_cidrs == ["10.0.0.0/8", "192.168.0.0/16"]
+
+    def test_allowed_cidrs_tolerates_spaces_after_commas(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("NETOPS_ALLOWED_CIDRS", "10.0.0.0/8, 172.16.0.0/12")
+        assert Settings().allowed_cidrs == ["10.0.0.0/8", "172.16.0.0/12"]
+
+    def test_a_single_cidr_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NETOPS_ALLOWED_CIDRS", "10.0.0.0/16")
+        assert Settings().allowed_cidrs == ["10.0.0.0/16"]
+
+    def test_an_invalid_cidr_in_the_environment_is_still_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("NETOPS_ALLOWED_CIDRS", "10.0.0.0/8,not-a-cidr")
+        with pytest.raises(ValidationError):
+            Settings()
+
+    def test_the_default_applies_when_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("NETOPS_ALLOWED_CIDRS", raising=False)
+        assert "10.0.0.0/8" in Settings().allowed_cidrs

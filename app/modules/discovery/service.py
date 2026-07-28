@@ -28,6 +28,80 @@ DEFAULT_PORTS = "22,53,80,111,139,443,445,554,1883,3000,3389,5000,5432,8006,8080
 
 SCAN_TIMEOUT_SECONDS = 300.0
 
+# Reading the container's own interfaces is cheap and must never delay the page.
+INTERFACE_TIMEOUT_SECONDS = 5.0
+
+
+def parse_local_networks(ip_output: str) -> list[ipaddress.IPv4Network]:
+    """Extract the networks this host is attached to from ``ip -4 -o addr show``.
+
+    Each line looks like::
+
+        2: eth0  inet 10.0.10.5/24 brd 10.0.10.255 scope global eth0\\  valid_lft ...
+
+    Only the address and prefix are used; everything else is ignored. Loopback
+    is excluded because scanning ourselves is never the intent.
+    """
+    networks: list[ipaddress.IPv4Network] = []
+    seen: set[str] = set()
+
+    for line in ip_output.splitlines():
+        fields = line.split()
+        if "inet" not in fields:
+            continue
+        try:
+            value = fields[fields.index("inet") + 1]
+        except IndexError:
+            continue
+        try:
+            # strict=False: the interface address has host bits set by
+            # definition, and the network it implies is what we want.
+            network = ipaddress.ip_network(value, strict=False)
+        except ValueError:
+            continue
+        if not isinstance(network, ipaddress.IPv4Network) or network.is_loopback:
+            continue
+        if str(network) not in seen:
+            seen.add(str(network))
+            networks.append(network)
+
+    return networks
+
+
+async def suggest_scan_targets(allowed: list[ipaddress.IPv4Network], max_hosts: int) -> list[str]:
+    """Networks this container is attached to that are actually scannable.
+
+    Exists because the alternative is asking an operator to type a subnet with
+    no indication of which ones would be accepted — and the obvious guess, the
+    first configured allowed range, is usually a supernet far above the host
+    cap. Suggesting only ranges that pass both checks means anything offered
+    here will work.
+
+    Returns an empty list rather than raising: this is a convenience on a page
+    that must still render if the lookup fails.
+    """
+    try:
+        result = await get_engine().run(
+            "ip", ["-4", "-o", "addr", "show"], timeout=INTERFACE_TIMEOUT_SECONDS
+        )
+    except (ExecutionBusy, ExecutionRejected) as exc:
+        logger.debug("could not read local interfaces: %s", exc)
+        return []
+
+    if result.status is not ExecutionStatus.SUCCESS:
+        logger.debug("`ip addr` exited %s", result.exit_code)
+        return []
+
+    suggestions: list[str] = []
+    for network in parse_local_networks(result.stdout):
+        if network.num_addresses > max_hosts:
+            continue
+        if not any(network.subnet_of(entry) for entry in allowed):
+            continue
+        suggestions.append(str(network))
+
+    return suggestions
+
 
 def build_scan_arguments(subnet: str, *, with_ports: bool = True) -> list[str]:
     """Build the nmap arguments for a discovery scan.

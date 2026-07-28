@@ -83,6 +83,10 @@ async def discovery_page(request: Request, session: SessionDep, user: ActiveUser
             "runs": await _recent_runs(session),
             "error": None,
             "active_run": None,
+            "suggestions": await service.suggest_scan_targets(
+                settings.allowed_networks, settings.max_scan_hosts
+            ),
+            "subnet": "",
         },
     )
 
@@ -111,6 +115,12 @@ async def start_discovery(
                 "runs": await _recent_runs(session),
                 "error": str(exc),
                 "active_run": None,
+                "suggestions": await service.suggest_scan_targets(
+                    settings.allowed_networks, settings.max_scan_hosts
+                ),
+                # Keep what was typed so a rejected value can be corrected
+                # rather than retyped.
+                "subnet": target,
             },
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -145,6 +155,10 @@ async def start_discovery(
             "runs": await _recent_runs(session),
             "error": None,
             "active_run": run,
+            "suggestions": await service.suggest_scan_targets(
+                settings.allowed_networks, settings.max_scan_hosts
+            ),
+            "subnet": str(network),
         },
     )
 

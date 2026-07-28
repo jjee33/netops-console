@@ -10,9 +10,10 @@ from __future__ import annotations
 import ipaddress
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -39,7 +40,13 @@ class Settings(BaseSettings):
     admin_password: str | None = None
 
     # -- Defaults seeded into the settings table on first run ---------------
-    allowed_cidrs: list[str] = Field(
+    #
+    # `NoDecode` is load-bearing. pydantic-settings tries to JSON-decode any
+    # env var destined for a complex type *before* field validators run, so
+    # NETOPS_ALLOWED_CIDRS="10.0.0.0/8,192.168.0.0/16" — the format documented
+    # in .env.example — raises SettingsError and the container never starts.
+    # NoDecode hands the raw string to _split_cidrs below instead.
+    allowed_cidrs: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"]
     )
     max_scan_hosts: int = 1024

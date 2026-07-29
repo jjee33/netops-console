@@ -10,6 +10,40 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.5] — 2026-07-28
+
+Hardening pass. One real security fix, two correctness gaps, and the example
+action pack.
+
+### Security
+- **A parameter flagged `secret` leaked into the stored command preview.**
+  `params_redacted` masked it, but the preview was built by joining the real
+  argv, so the plaintext was written to the database and rendered on the action
+  result panel and in the audit log. What executes and what is recorded are now
+  built separately: the device still receives the real value, the record does
+  not. Found during a review pass against the threat model, not by a failing
+  test.
+
+### Fixed
+- **Actions were missing from the audit log entirely.** The page claims to show
+  everything this instance has done and silently omitted the one category where
+  knowing what ran, with which parameters, against which device, matters most.
+- **Action executions were never pruned.** They carry stdout and stderr and
+  accumulate exactly like diagnostic results, with nothing removing them.
+  Retention now covers both tables under one window.
+
+### Added
+- An example action pack — eight actions annotated with what each actually
+  costs you, such as a `docker` command requiring a root-equivalent group. A
+  test keeps every one valid, described, confirmed where it changes state, and
+  flagged where it needs sudo.
+
+### Notes
+- The rest of the review found nothing: no `|safe` on untrusted output, no
+  subprocess call site outside the execution engine, no `known_hosts=None` on
+  any path carrying a credential, no GET route that mutates state, and no
+  user-supplied path reaching disk.
+
 ## [0.1.0-alpha.4] — 2026-07-28
 
 Actions, credentials, and SSH. This completes the feature scope planned for v0.1.
@@ -195,7 +229,8 @@ Delivery pipeline and container foundation. No usable application.
   asserts capabilities, the non-root UID, loopback-only binding, and SQLite pragmas.
 - Release pipeline publishing signed multi-arch images with SBOM and provenance.
 
-[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.4...HEAD
+[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.5...HEAD
+[0.1.0-alpha.5]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.4...v0.1.0-alpha.5
 [0.1.0-alpha.4]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.1...v0.1.0-alpha.2

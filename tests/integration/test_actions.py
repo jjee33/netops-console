@@ -298,8 +298,36 @@ class TestExecution:
             data={"csrf_token": token, "token": "supersecret"},
         )
 
-        params = (await _executions())[0].params_redacted or {}
-        assert params.get("token") == "[redacted]"
+        execution = (await _executions())[0]
+        assert (execution.params_redacted or {}).get("token") == "[redacted]"
+
+        # And the same value must not survive in the command preview, which is
+        # stored in the database and rendered in the audit log.
+        assert "supersecret" not in (execution.command_preview or "")
+        assert "[redacted]" in (execution.command_preview or "")
+
+    async def test_a_secret_parameter_does_not_reach_the_audit_log(
+        self, auth_client: httpx.AsyncClient
+    ) -> None:
+        await _allow(auth_client)
+        action_id = await self._create_and_get(
+            auth_client,
+            name="With secret",
+            argv_template=json.dumps(["ip", "route", "get", "{token}"]),
+            param_schema=json.dumps(
+                {"token": {"type": "string", "pattern": "^[a-z0-9]+$", "secret": True}}
+            ),
+        )
+        device_id = await _device()
+
+        token = await csrf_token(auth_client, f"/devices/{device_id}")
+        await auth_client.post(
+            f"/devices/{device_id}/actions/{action_id}",
+            data={"csrf_token": token, "token": "supersecret"},
+        )
+
+        audit = await auth_client.get("/audit")
+        assert "supersecret" not in audit.text
 
 
 class TestApplicability:

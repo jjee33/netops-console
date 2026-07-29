@@ -7,12 +7,15 @@ accordingly: nearly all of them are rejections.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from app.core.validation import ValidationError
 from app.modules.actions.schema import (
     ParamSpec,
     build_argv,
+    build_preview,
     build_ssh_command,
     coerce,
     parse_schema,
@@ -238,3 +241,49 @@ class TestRedaction:
 
     def test_unknown_keys_pass_through(self) -> None:
         assert redact({"extra": "value"}, {}) == {"extra": "value"}
+
+
+class TestPreviewMasking:
+    """What is stored and displayed is not what is executed.
+
+    `params_redacted` masked secrets from the start, but the command preview did
+    not — so a parameter flagged `secret` was written to the database in
+    plaintext and rendered in the audit log. The same leak, arriving through a
+    different field.
+    """
+
+    SPECS: ClassVar[dict[str, ParamSpec]] = {
+        "user": ParamSpec("user", pattern=r"^[a-z]+$"),
+        "token": ParamSpec("token", pattern=r"^[a-z0-9]+$", secret=True),
+    }
+    TEMPLATE: ClassVar[list[str]] = ["login", "{user}", "{token}"]
+    VALUES: ClassVar[dict[str, str]] = {"user": "admin", "token": "supersecretvalue"}
+
+    def test_the_preview_masks_secret_parameters(self) -> None:
+        preview = build_preview(self.TEMPLATE, self.SPECS, self.VALUES)
+        assert "supersecretvalue" not in preview
+        assert "[redacted]" in preview
+
+    def test_non_secret_parameters_are_still_shown(self) -> None:
+        """A preview that masked everything would be useless for working out
+        what an action actually did."""
+        preview = build_preview(self.TEMPLATE, self.SPECS, self.VALUES)
+        assert "admin" in preview
+        assert preview == "login admin [redacted]"
+
+    def test_the_quoted_form_masks_too(self) -> None:
+        preview = build_preview(self.TEMPLATE, self.SPECS, self.VALUES, quote=True)
+        assert "supersecretvalue" not in preview
+
+    def test_what_executes_still_carries_the_real_value(self) -> None:
+        """The point of keeping them separate: the device must receive the real
+        secret, and only the record is masked."""
+        argv = build_argv(self.TEMPLATE, self.SPECS, self.VALUES)
+        assert "supersecretvalue" in argv
+
+        command = build_ssh_command(self.TEMPLATE, self.SPECS, self.VALUES)
+        assert "supersecretvalue" in command
+
+    def test_a_template_with_no_secrets_previews_verbatim(self) -> None:
+        specs = {"path": ParamSpec("path", pattern=r"^/[a-z]+$")}
+        assert build_preview(["ls", "{path}"], specs, {"path": "/etc"}) == "ls /etc"

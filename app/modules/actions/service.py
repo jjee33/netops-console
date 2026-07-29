@@ -160,7 +160,11 @@ async def execute(
 
     # Stored before running: the single most useful field for working out what
     # an action actually did, and it must survive the command failing.
-    execution.command_preview = " ".join(argv)
+    #
+    # Built from the template rather than from argv, because argv holds the real
+    # values — joining it would write any parameter flagged `secret` into the
+    # database in plaintext and render it in the audit log.
+    execution.command_preview = schema.build_preview(definition.argv_template, specs, values)
 
     try:
         result = await get_engine().run(
@@ -221,10 +225,12 @@ async def _execute_ssh(
 
     trusted = await credentials_service.trusted_key_for(session, device.id)
 
-    # Built after the checks above so a rejected run still records what would
-    # have been sent, with secrets already masked.
+    # Two different strings on purpose: one is sent to the device, the other is
+    # stored and displayed. Only the second has secrets masked.
     command = schema.build_ssh_command(definition.argv_template, specs, values)
-    execution.command_preview = command
+    execution.command_preview = schema.build_preview(
+        definition.argv_template, specs, values, quote=True
+    )
 
     try:
         result = await ssh_client.run_command(

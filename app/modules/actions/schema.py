@@ -38,6 +38,9 @@ MAX_PARAMS: Final = 10
 MAX_ARGV_TOKENS: Final = 32
 MAX_STRING_LENGTH: Final = 256
 
+# What a secret parameter looks like once it is safe to store or display.
+MASK: Final = "[redacted]"
+
 # Patterns an administrator might write that would not actually constrain
 # anything. Each is refused with an explanation rather than silently accepted.
 _USELESS_PATTERNS: Final = {".*", "^.*$", ".+", "^.+$", "", "^$", "(.*)", "^(.*)$"}
@@ -292,9 +295,48 @@ def build_ssh_command(
     return " ".join(parts)
 
 
+def build_preview(
+    template: list[str],
+    specs: dict[str, ParamSpec],
+    values: dict[str, object],
+    *,
+    quote: bool = False,
+) -> str:
+    """Build the human-readable record of what ran, with secrets masked.
+
+    Separate from :func:`build_argv` and :func:`build_ssh_command` on purpose.
+    Those produce what is actually executed and are never stored; this produces
+    what is written to the execution record and shown in the audit log.
+
+    Collapsing the two would put a parameter flagged ``secret`` into the
+    database in plaintext and render it on a page — which is precisely the leak
+    that masking ``params_redacted`` alone was supposed to prevent, arriving
+    through a different field.
+
+    ``quote`` mirrors the SSH path so the preview reflects the quoting that was
+    actually applied.
+    """
+    parts: list[str] = []
+
+    for token in template:
+        match = PLACEHOLDER.match(token)
+        if not match:
+            parts.append(shlex.quote(token) if quote else token)
+            continue
+
+        spec = specs[match.group(1)]
+        # Values have already been validated by the time a preview is built, so
+        # coerce cannot raise here; it is reused so the preview shows exactly
+        # what was substituted.
+        value = MASK if spec.secret else coerce(values.get(spec.name), spec)
+        parts.append(shlex.quote(value) if quote else value)
+
+    return " ".join(parts)
+
+
 def redact(values: dict[str, object], specs: dict[str, ParamSpec]) -> dict[str, object]:
     """Mask anything the schema flagged secret, before it is stored."""
     return {
-        name: ("[redacted]" if name in specs and specs[name].secret else value)
+        name: (MASK if name in specs and specs[name].secret else value)
         for name, value in values.items()
     }

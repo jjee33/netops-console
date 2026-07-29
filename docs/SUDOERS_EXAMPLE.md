@@ -1,6 +1,6 @@
 # Elevated actions: sudoers and ForceCommand
 
-> Actions land in Phase 4 and Phase 5. This document describes the host-side configuration they will expect. The patterns below apply whether or not you use this application.
+This describes the host-side configuration actions expect. The patterns below apply whether or not you use this application.
 
 Some actions need privileges the SSH user does not have. Granting them is your decision and happens on the target host, not in this application — which is the point. This app cannot grant itself anything.
 

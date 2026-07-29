@@ -10,6 +10,51 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] — 2026-07-28
+
+Actions, credentials, and SSH. This completes the feature scope planned for v0.1.
+
+### Added
+- **Actions** — commands an administrator defines once and runs against devices,
+  local or over SSH. The browser sends an action and its parameters; there is no
+  field anywhere that carries a command.
+- **Encrypted credential store.** SSH keys and passwords are Fernet-encrypted
+  with the key generated at first start and decrypted only in memory at
+  connection time. Nothing returns a secret — the UI shows a name, a username
+  and a fingerprint. Keys are parsed on entry, so a malformed one is rejected
+  while you are looking at the form.
+- **SSH host key trust workflow.** The first connection to a device surfaces its
+  fingerprint and stops; you compare it against the device and decide. Trust is
+  recorded with who accepted it and when, and can be revoked when a device is
+  legitimately rebuilt.
+- **New-device awareness** — a dashboard tile and device filter for anything
+  first seen in the last seven days, with the devices listed rather than only
+  counted.
+
+### Security
+- **A credential is never offered to a device whose identity has not been
+  verified.** A key that later changes fails the connection instead of being
+  silently re-trusted; the trust route re-reads the key from the device rather
+  than believing the submitted form.
+- **SSH parameters must carry a regex pattern or a fixed set of choices**,
+  enforced when the action is saved rather than when it runs. Locally argv is a
+  real boundary and metacharacters are inert; over SSH the command goes to the
+  remote login shell, so the pattern is what stands between a parameter and
+  remote code execution. A pattern matching everything is refused — it looks
+  like a constraint and is not.
+- A parameter is always exactly one argv token. `--name={x}` is refused, because
+  that is how one parameter becomes two arguments or a flag.
+- Every substituted SSH value is `shlex.quote`d as well. Verified against a real
+  shell: with a deliberately permissive pattern, `echo 'hi; id'` printed a
+  literal string and `id` did not run.
+- The program in a template cannot itself be a parameter, and local programs are
+  resolved against the execution allowlist when the action is saved.
+
+### Fixed
+- The SSH fixture key is generated per test session rather than committed. A
+  private key in a public repository trips every secret scanner for everyone who
+  forks it, whatever it is authorised for.
+
 ## [0.1.0-alpha.3] — 2026-07-27
 
 Diagnostics, the audit log, and three correctness fixes in shipped behaviour.
@@ -150,7 +195,8 @@ Delivery pipeline and container foundation. No usable application.
   asserts capabilities, the non-root UID, loopback-only binding, and SQLite pragmas.
 - Release pipeline publishing signed multi-arch images with SBOM and provenance.
 
-[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.3...HEAD
+[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.4...HEAD
+[0.1.0-alpha.4]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.2...v0.1.0-alpha.3
 [0.1.0-alpha.2]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.1...v0.1.0-alpha.2
 [0.1.0-alpha.1]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.0...v0.1.0-alpha.1

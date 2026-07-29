@@ -1,6 +1,6 @@
 # Action definitions
 
-> **Not yet implemented.** Actions land in Phase 4 (local) and Phase 5 (SSH). This document is the design contract they are being built against, published early because the security reasoning is what matters and it should not be invented at implementation time.
+Actions are implemented as described here. The reasoning below is the design contract they were built against, and the rules are enforced when an action is *saved* rather than when it runs — an unsafe definition cannot be stored and then discovered later by whoever clicks it.
 
 An *action* is an allowlisted command an administrator defines once and then runs against devices. The browser only ever sends an action ID and a set of parameters; it cannot send a command string. The server resolves what actually runs.
 
@@ -16,7 +16,7 @@ An *action* is an allowlisted command an administrator defines once and then run
   "timeout_seconds": 10,
   "confirmation_required": false,
   "elevated_required": false,
-  "applicable_tags": []
+  "applicable_types": []
 }
 ```
 
@@ -28,7 +28,7 @@ An *action* is an allowlisted command an administrator defines once and then run
 | `timeout_seconds` | Hard cap; the engine kills the process group on expiry |
 | `confirmation_required` | Requires an explicit confirm step in the UI |
 | `elevated_required` | Needs a sudoers entry — see [SUDOERS_EXAMPLE.md](SUDOERS_EXAMPLE.md) |
-| `applicable_tags` | Restricts which devices it can target; empty means all |
+| `applicable_types` | Restricts which device types it can target; empty means all |
 
 ## Local actions: argv is a real boundary
 
@@ -57,7 +57,7 @@ An SSH "exec" request transmits a **single command string** to the remote `sshd`
   },
   "timeout_seconds": 30,
   "confirmation_required": true,
-  "applicable_tags": ["docker-host"]
+  "applicable_types": ["docker-host"]
 }
 ```
 

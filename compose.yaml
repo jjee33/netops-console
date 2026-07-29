@@ -12,7 +12,7 @@ services:
     # stable semver tag, so until v0.1.0 ships it does not exist and defaulting
     # to it would make the README quickstart fail to pull. Reverting this to
     # `latest` is a step in the v0.1.0 release checklist.
-    image: ghcr.io/jjee33/netops-console:${NETOPS_VERSION:-v0.1.0-alpha.3}
+    image: ghcr.io/jjee33/netops-console:${NETOPS_VERSION:-v0.1.0-alpha.4}
     container_name: netops-console
 
     # Layer 2 discovery needs to see the real LAN. Under bridge networking,

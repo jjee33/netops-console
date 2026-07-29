@@ -2,13 +2,13 @@
 
 Self-hosted network operations console for homelabs and small offices. Discovers what is on your LAN, runs diagnostics against it, and executes a fixed set of allowlisted commands — with every action written to an audit log.
 
-That is the goal. Discovery and inventory work today; diagnostics, actions and the audit log are still being built. See below.
+All of that works today. It is still a prerelease — see the status note below for what that means for your data.
 
 [![CI](https://github.com/jjee33/netops-console/actions/workflows/ci.yml/badge.svg)](https://github.com/jjee33/netops-console/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Image](https://img.shields.io/badge/ghcr.io-netops--console-blue?logo=docker)](https://github.com/jjee33/netops-console/pkgs/container/netops-console)
 
-> **Status: pre-release (`v0.1.0-alpha.3`).** Usable but incomplete — see the table below for what actually works today. The schema may change between alpha tags without a migration path. Watch the repo for the v0.1.0 release.
+> **Status: pre-release (`v0.1.0-alpha.4`).** Usable but incomplete — see the table below for what actually works today. The schema may change between alpha tags without a migration path. Watch the repo for the v0.1.0 release.
 
 ---
 
@@ -21,14 +21,16 @@ That is the goal. Discovery and inventory work today; diagnostics, actions and t
 | **Discovery** | nmap host and port scanning of a chosen subnet, producing an inventory with IP, MAC, vendor, hostname and open ports. Safely re-runnable — a second scan of the same range creates no duplicates |
 | **Inventory** | Sortable, searchable device list; device detail with open ports; your own name, type and notes, which a rescan never overwrites. Removal is a soft delete, so history survives |
 | **Diagnostics** | Ping, traceroute, DNS, reverse DNS, TCP port test, service scan, ARP entry and HTTP check, from the device page. No free-form command input anywhere — the browser sends which check to run, never a command |
-| **Audit log** | Every diagnostic and discovery run, with the acting user, client IP, timing and outcome. Refusals are recorded too. History survives deleting the device or the account |
+| **Actions** | Commands you define once and run against devices, locally or over SSH. Parameters are validated against a schema you set; the browser sends an action and its parameters, never a command |
+| **Credentials** | SSH keys and passwords encrypted at rest, decrypted only in memory at connection time. Never rendered back to a browser |
+| **SSH host key trust** | A credential is never offered to a device whose identity you have not verified. First contact shows a fingerprint and stops; a changed key fails rather than being silently re-trusted |
+| **Audit log** | Every diagnostic, action and discovery run, with the acting user, client IP, timing and outcome. Refusals are recorded too. History survives deleting the device or the account |
 
 ## Not built yet
 
-**Actions** — allowlisted commands you define, run locally or over SSH with
-typed parameter schemas, an encrypted credential store, and strict SSH host key
-verification with an explicit human trust step. That is the remaining work for
-v0.1.
+The v0.1 feature scope is complete. What remains before the release is
+hardening: a full pass over the threat model, the remaining documentation, and
+verification against real hardware beyond a single homelab.
 
 ## What it deliberately does not do
 
@@ -40,9 +42,9 @@ This is **privileged infrastructure software**. It holds credentials and runs co
 
 It is designed to run on a trusted management network, behind a reverse proxy that terminates TLS, and **never exposed directly to the internet**. The container binds `127.0.0.1` by default specifically so that a misconfiguration cannot silently publish an admin panel to your LAN.
 
-Design choices that follow from that, and which are in place now: a non-root container with all capabilities dropped except `CAP_NET_RAW`, a read-only root filesystem, no free-form command input anywhere in the UI, and a single choke point through which every command execution passes — no shell, argv arrays only, allowlisted binaries, hard timeouts, and process-group kills.
+Design choices that follow from that: a non-root container with all capabilities dropped except `CAP_NET_RAW`, a read-only root filesystem, no free-form command input anywhere in the UI, and a single choke point through which every command execution passes — no shell, argv arrays only, allowlisted binaries, hard timeouts, and process-group kills.
 
-Still to come with the features that need them: credentials encrypted at rest, and strict SSH host key verification with an explicit human trust step.
+Credentials are encrypted at rest and decrypted only in memory at connection time. SSH connections use strict host key verification: a credential is never offered to a device whose identity you have not explicitly verified, and a key that later changes fails the connection rather than being silently re-trusted.
 
 Full threat model and vulnerability reporting: [SECURITY.md](SECURITY.md).
 

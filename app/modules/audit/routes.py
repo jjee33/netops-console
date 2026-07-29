@@ -1,10 +1,9 @@
 """Audit log.
 
 A single chronological view over everything the application has done —
-diagnostics and discovery runs today, actions when they land. Kept as one
-timeline rather than per-feature tables because the question an operator
-actually asks is "what happened to my network", not "what did the diagnostics
-subsystem do".
+diagnostics, actions and discovery runs. Kept as one timeline rather than
+per-feature tables because the question an operator actually asks is "what
+happened to my network", not "what did the diagnostics subsystem do".
 
 Paginated with a keyset on ``started_at`` rather than an offset. This table only
 grows, and an offset scan gets slower the further back you look while also
@@ -23,7 +22,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 
 from app.core.templating import render
-from app.models import DiagnosticResult, DiscoveryRun
+from app.models import ActionExecution, DiagnosticResult, DiscoveryRun
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.diagnostics import service as diagnostics_service
 
@@ -38,7 +37,7 @@ PAGE_SIZE = 50
 class AuditEntry:
     """One row of the timeline, whatever it came from."""
 
-    kind: Literal["diagnostic", "discovery"]
+    kind: Literal["diagnostic", "action", "discovery"]
     when: datetime
     action: str
     target: str
@@ -63,6 +62,22 @@ def _from_diagnostic(result: DiagnosticResult) -> AuditEntry:
         client_ip=result.client_ip,
         duration_ms=result.duration_ms,
         link=f"/diagnostics/{result.id}",
+    )
+
+
+def _from_action(execution: ActionExecution) -> AuditEntry:
+    return AuditEntry(
+        kind="action",
+        when=execution.started_at,
+        action=execution.action_name_snapshot or "Action",
+        target=execution.device_label_snapshot or "—",
+        status=execution.status,
+        # The command as actually run, already redacted. The single most useful
+        # field when working out what an action did.
+        detail=execution.command_preview or "",
+        username=execution.username_snapshot,
+        client_ip=execution.client_ip,
+        duration_ms=execution.duration_ms,
     )
 
 
@@ -112,6 +127,14 @@ async def audit_log(
             diagnostics = diagnostics.where(DiagnosticResult.started_at < cursor)
         entries += [
             _from_diagnostic(row) for row in await session.scalars(diagnostics.limit(PAGE_SIZE + 1))
+        ]
+
+    if kind in ("", "action"):
+        actions = select(ActionExecution).order_by(ActionExecution.started_at.desc())
+        if cursor:
+            actions = actions.where(ActionExecution.started_at < cursor)
+        entries += [
+            _from_action(row) for row in await session.scalars(actions.limit(PAGE_SIZE + 1))
         ]
 
     if kind in ("", "discovery"):

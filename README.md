@@ -104,6 +104,7 @@ Only stable semver tags get `latest`, so during the prerelease series it does no
 | [docs/UPGRADING.md](docs/UPGRADING.md) | Upgrade and rollback |
 | [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) | Consistent SQLite backup, key backup, restore drill |
 | [docs/ACTION_DEFINITIONS.md](docs/ACTION_DEFINITIONS.md) | Writing safe action definitions |
+| [examples/actions.json](examples/actions.json) | Eight example actions, annotated with what each one actually costs you |
 | [docs/SUDOERS_EXAMPLE.md](docs/SUDOERS_EXAMPLE.md) | Narrow sudoers and SSH `ForceCommand` hardening |
 | [SECURITY.md](SECURITY.md) | Threat model and vulnerability reporting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup and project rules |

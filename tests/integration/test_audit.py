@@ -168,3 +168,67 @@ class TestEscaping:
         response = await auth_client.get("/audit")
         assert "<script>alert('xss')</script>" not in response.text
         assert "&lt;script&gt;" in response.text
+
+
+class TestActionsInTheTimeline:
+    """Actions were missing from the audit log entirely.
+
+    The page says "everything this instance has done". A log that silently omits
+    a whole category of execution is worse than one that admits its scope.
+    """
+
+    async def _seed_action(self, status: str = "success") -> None:
+        from app.models import ActionExecution
+
+        async with get_session_factory()() as session:
+            session.add(
+                ActionExecution(
+                    action_name_snapshot="Restart nginx",
+                    device_label_snapshot="10.0.30.5",
+                    username_snapshot="admin",
+                    client_ip="10.0.30.99",
+                    command_preview="systemctl restart nginx",
+                    status=status,
+                    started_at=datetime.now(UTC),
+                    duration_ms=340,
+                )
+            )
+            await session.commit()
+
+    async def test_actions_appear_in_the_combined_view(
+        self, auth_client: httpx.AsyncClient
+    ) -> None:
+        await self._seed_action()
+        response = await auth_client.get("/audit")
+        assert "Restart nginx" in response.text
+
+    async def test_the_command_that_ran_is_shown(self, auth_client: httpx.AsyncClient) -> None:
+        """The single most useful field for working out what an action did."""
+        await self._seed_action()
+        response = await auth_client.get("/audit")
+        assert "systemctl restart nginx" in response.text
+
+    async def test_actions_can_be_filtered(self, auth_client: httpx.AsyncClient) -> None:
+        await self._seed_action()
+        await _seed(diagnostics=2, runs=1)
+
+        response = await auth_client.get("/audit?kind=action")
+        assert "Restart nginx" in response.text
+        assert "Discovery scan" not in response.text
+        assert "Ping" not in response.text
+
+    async def test_refused_actions_are_shown_too(self, auth_client: httpx.AsyncClient) -> None:
+        await self._seed_action(status="rejected")
+        response = await auth_client.get("/audit")
+        assert "rejected" in response.text
+
+    async def test_all_three_sources_interleave_by_time(
+        self, auth_client: httpx.AsyncClient
+    ) -> None:
+        await _seed(diagnostics=2, runs=1)
+        await self._seed_action()
+
+        response = await auth_client.get("/audit")
+        assert "Restart nginx" in response.text
+        assert "Ping" in response.text
+        assert "Discovery scan" in response.text

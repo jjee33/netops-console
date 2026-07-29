@@ -1,0 +1,123 @@
+[
+  {
+    "name": "Show routing table",
+    "description": "Display this container's routing table. Useful for confirming which interface a subnet is reached through.",
+    "execution_type": "local",
+    "argv_template": ["ip", "route", "show"],
+    "param_schema": {},
+    "timeout_seconds": 10,
+    "confirmation_required": false,
+    "elevated_required": false,
+    "applicable_types": []
+  },
+  {
+    "name": "Show neighbour table",
+    "description": "The kernel's ARP cache. Under host networking this is the real LAN neighbour table.",
+    "execution_type": "local",
+    "argv_template": ["ip", "-4", "neigh", "show"],
+    "param_schema": {},
+    "timeout_seconds": 10,
+    "confirmation_required": false,
+    "elevated_required": false,
+    "applicable_types": []
+  },
+  {
+    "name": "Route to device",
+    "description": "Which interface and gateway this container would use to reach an address.",
+    "execution_type": "local",
+    "argv_template": ["ip", "route", "get", "{target}"],
+    "param_schema": {
+      "target": {
+        "type": "string",
+        "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$",
+        "required": true,
+        "description": "An IPv4 address"
+      }
+    },
+    "timeout_seconds": 10,
+    "confirmation_required": false,
+    "elevated_required": false,
+    "applicable_types": []
+  },
+  {
+    "name": "Remote uptime",
+    "description": "Load average and time since boot. No parameters, so no injection surface at all — the safest shape an SSH action can have.",
+    "execution_type": "ssh",
+    "argv_template": ["uptime"],
+    "param_schema": {},
+    "timeout_seconds": 20,
+    "confirmation_required": false,
+    "elevated_required": false,
+    "applicable_types": []
+  },
+  {
+    "name": "Remote disk usage",
+    "description": "Filesystem usage on the device.",
+    "execution_type": "ssh",
+    "argv_template": ["df", "-h"],
+    "param_schema": {},
+    "timeout_seconds": 20,
+    "confirmation_required": false,
+    "elevated_required": false,
+    "applicable_types": []
+  },
+  {
+    "name": "Restart a systemd unit",
+    "description": "Requires a NOPASSWD sudoers entry on the target for each exact unit — see docs/SUDOERS_EXAMPLE.md. The unit is a fixed set of choices rather than free text, because 'systemctl restart <anything>' via sudo is trivially escalatable to root.",
+    "execution_type": "ssh",
+    "argv_template": ["sudo", "systemctl", "restart", "{unit}"],
+    "param_schema": {
+      "unit": {
+        "type": "string",
+        "choices": ["nginx", "docker", "ssh"],
+        "required": true,
+        "description": "Edit this list to match the sudoers entries you actually installed"
+      }
+    },
+    "timeout_seconds": 60,
+    "confirmation_required": true,
+    "elevated_required": true,
+    "applicable_types": []
+  },
+  {
+    "name": "Restart a Docker container",
+    "description": "WARNING: requires the SSH user to be in the docker group, which is root-equivalent on the target — it can mount the host filesystem into a container. Treat this credential as a root credential.",
+    "execution_type": "ssh",
+    "argv_template": ["docker", "restart", "{container}"],
+    "param_schema": {
+      "container": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$",
+        "required": true,
+        "description": "Container name. The pattern rejects spaces, semicolons, backticks and $()."
+      }
+    },
+    "timeout_seconds": 60,
+    "confirmation_required": true,
+    "elevated_required": false,
+    "applicable_types": ["docker-host"]
+  },
+  {
+    "name": "Tail a log file",
+    "description": "Last N lines of a fixed set of log paths. The path is a choice rather than free text — a free-text path is a directory traversal waiting to happen, and reading arbitrary files over SSH is not a diagnostic.",
+    "execution_type": "ssh",
+    "argv_template": ["sudo", "tail", "-n", "{lines}", "{path}"],
+    "param_schema": {
+      "lines": {
+        "type": "integer",
+        "min": 1,
+        "max": 500,
+        "required": true
+      },
+      "path": {
+        "type": "string",
+        "choices": ["/var/log/syslog", "/var/log/auth.log", "/var/log/kern.log"],
+        "required": true
+      }
+    },
+    "timeout_seconds": 30,
+    "confirmation_required": false,
+    "elevated_required": true,
+    "applicable_types": []
+  }
+]

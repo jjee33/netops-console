@@ -16,10 +16,10 @@ import ipaddress
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Final
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.execution import ExecutionBusy, ExecutionRejected, ExecutionStatus, get_engine
@@ -353,27 +353,16 @@ async def recent_for_device(
 
 
 async def prune(session: AsyncSession, retention_days: int) -> int:
-    """Delete diagnostic history past the retention window.
+    """Prune execution history. Delegates to the shared retention module.
 
-    Not optional. Each row carries an output blob, and a device page that is
-    used regularly produces them steadily — without this the database and every
-    backup taken from it grow without bound.
+    Kept as a thin wrapper because this is the call site that matters — the
+    path that creates the volume is the one that pays for cleaning it up — but
+    the policy itself now covers action executions too, which accumulate the
+    same way and were previously never pruned at all.
     """
-    if retention_days < 1:
-        return 0
+    from app.core.retention import prune as prune_all
 
-    cutoff = datetime.now(UTC) - timedelta(days=retention_days)
-    outcome = await session.execute(
-        delete(DiagnosticResult).where(DiagnosticResult.started_at < cutoff)
-    )
-    await session.commit()
-
-    # CursorResult carries rowcount; the base Result type does not, and mypy
-    # only sees the latter on an async execute.
-    removed = getattr(outcome, "rowcount", 0) or 0
-    if removed:
-        logger.info("pruned %d diagnostic result(s) older than %d days", removed, retention_days)
-    return removed
+    return (await prune_all(session, retention_days)).total
 
 
 __all__ = [

@@ -191,6 +191,12 @@ async def run_action(
         client_ip=client_ip(request),
     )
 
+    # Same reasoning as diagnostics: the path that creates the volume is the
+    # one that pays for cleaning it up.
+    from app.core.retention import prune
+
+    await prune(session, settings.retention_days)
+
     return render(
         request,
         "partials/action_result.html",

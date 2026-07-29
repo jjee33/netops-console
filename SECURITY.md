@@ -28,13 +28,13 @@ Understanding this is a prerequisite for deploying the application safely. Sever
 | Threat | Control |
 |---|---|
 | Command injection, local execution | No shell, ever. `asyncio.create_subprocess_exec` with argv arrays; each parameter is exactly one argv element. |
-| Command injection, SSH execution | Argv is **not** a boundary here — `sshd` runs the command through the remote user's login shell. Controlled instead by mandatory per-parameter regex allowlists, `shlex.quote` on every substitution, and a documented `ForceCommand` pattern that moves enforcement to the target host. |
+| Command injection, SSH execution | Argv is **not** a boundary here — `sshd` runs the command through the remote user's login shell. Controlled instead by per-parameter regex allowlists or fixed choices, **mandatory and enforced when the action is saved** so an unsafe definition cannot be stored; `shlex.quote` on every substitution; and a documented `ForceCommand` pattern that moves enforcement to the target host. A pattern that matches everything is refused. |
 | Arbitrary command execution from the browser | The frontend sends an action ID and parameters. It cannot send a command string. Built-in diagnostics use hardcoded argv builders and are not admin-editable. |
 | SSRF | Every destination is parsed with `ipaddress`, must fall inside admin-configured CIDRs, and hostnames are re-validated *after* DNS resolution. Loopback, link-local (including `169.254.169.254`), multicast, and public ranges are rejected. HTTP checks do not follow redirects. |
 | Excessive scan ranges | Prefix size capped (default ~1024 hosts), per-scan timeout, and a concurrent-scan limit. |
 | Runaway processes | Hard per-action timeout; the engine kills the whole **process group**, so children of traceroute and continuous ping die with the parent. |
-| Credential exposure | Encrypted at rest with a master key that lives outside the database and outside the image. Decrypted in memory only at execution time. Never sent to the browser, never written to logs, masked in audit records. |
-| SSH MITM | Strict host key verification against a database-backed trust store. First contact requires an explicit human trust action recording who trusted which fingerprint and when. A changed key fails the connection; it is never silently re-trusted. |
+| Credential exposure | Fernet-encrypted at rest with a key that lives outside the database and outside the image. Decrypted in memory only at connection time. No route returns a secret; the UI shows a name, username and fingerprint. Parameters flagged `secret` are masked before an execution record is written. |
+| SSH MITM | Strict host key verification against a database-backed trust store. A credential is never offered to a device whose key is unknown — the connection is refused during key exchange, before authentication. First contact requires an explicit human trust action recording who trusted which fingerprint and when, and the trust route re-reads the key from the device rather than believing the submitted form. A changed key fails the connection; it is never silently re-trusted. |
 | XSS from command output | All command output is untrusted. Autoescaped, rendered in `<pre>`, ANSI and control characters stripped, size-capped. A restrictive CSP is set, and device hostnames rendered into links are scheme-validated to reject `javascript:`. |
 | CSRF | Synchronizer token required on every state-changing request. |
 | Credential brute force | Per-account lockout with backoff plus a per-IP rate limit. Failure messages never reveal whether a username exists. |
@@ -60,7 +60,7 @@ Controls that are yours, not the application's:
 1. **Terminate TLS in front of it.** The app speaks plain HTTP on loopback deliberately.
 2. **Back up `crypto_key` separately from the database.** Storing them together defeats the encryption. Losing it destroys every stored credential.
 3. **Keep `--workers 1`.** It is not a performance knob; it is a safety property.
-4. **Prefer `ForceCommand`-restricted SSH keys on targets.** It is the only control that survives a compromise of this application.
+4. **Restrict SSH keys on the target** with an `authorized_keys` `command="..."` entry. It is the only control listed anywhere here that still protects a device if this application is compromised. See [docs/SUDOERS_EXAMPLE.md](docs/SUDOERS_EXAMPLE.md).
 5. **Do not put an SSH user in the `docker` group** unless you accept that the credential is a root credential on that host.
 6. **Keep the image current.** It bundles nmap and OpenSSL. Releases are scanned weekly, but only you can pull.
 7. **The initial admin password is printed to the container logs.** This is deliberate — it is the only channel available before an account exists, and anyone who can read those logs already has Docker access, which is root-equivalent on the host. It does mean the password transits your logging pipeline, so if you ship container logs to a third party, change the password promptly and consider setting `NETOPS_ADMIN_PASSWORD` instead. It is a one-time value and the account is forced to rotate it at first login.

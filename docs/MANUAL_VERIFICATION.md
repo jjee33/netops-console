@@ -105,7 +105,30 @@ docker compose exec app ps -eo pid,comm
 **Fail:** orphaned processes mean the engine killed the child but not the
 process group, which leaks sockets and file descriptors over time.
 
-## 7. Fresh-volume install
+## 7. SSH host key trust
+
+Needs a device you can SSH to, and a credential stored under **Credentials**.
+
+1. Assign the credential to the device on its page.
+2. Run an SSH action **before** trusting the host key.
+3. Click **Read its host key**, compare the fingerprint against the device
+   itself (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on most Linux
+   hosts), then trust it.
+4. Run the action again.
+5. Click **Forget this key** and run it once more.
+
+**Pass:** refused → trusted → runs → forgotten → refused again. The refusal must
+name the fingerprint it saw.
+
+**Fail:** if step 2 succeeds, the credential is being offered to an unverified
+host, which is the one thing this feature exists to prevent. Stop and report it.
+
+To check the changed-key path, regenerate the device's host keys
+(`sudo rm /etc/ssh/ssh_host_* && sudo dpkg-reconfigure openssh-server`) while a
+key is trusted. The next run must fail with both fingerprints shown — not
+silently accept the new one.
+
+## 8. Fresh-volume install
 
 ```bash
 docker compose down -v
@@ -119,7 +142,7 @@ working login. No `EACCES`.
 This is the exact path every public user takes on first run, and it is the one
 most likely to rot silently as the project changes. Worth repeating each release.
 
-## 8. Restart does not rotate credentials
+## 9. Restart does not rotate credentials
 
 ```bash
 docker compose restart app
@@ -132,7 +155,7 @@ exists"*. Your password still works.
 **Fail:** a new admin password printed on every restart means the bootstrap is
 not idempotent, and any credential already stored is now undecryptable.
 
-## 9. Backup and restore drill
+## 10. Backup and restore drill
 
 Do this once, properly, before you rely on it:
 

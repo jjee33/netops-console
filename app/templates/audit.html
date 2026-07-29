@@ -12,6 +12,7 @@
 <nav class="filter-tabs" aria-label="Filter by type">
   <a href="/audit" class="{% if not kind %}active{% endif %}">All</a>
   <a href="/audit?kind=diagnostic" class="{% if kind == 'diagnostic' %}active{% endif %}">Diagnostics</a>
+  <a href="/audit?kind=action" class="{% if kind == 'action' %}active{% endif %}">Actions</a>
   <a href="/audit?kind=discovery" class="{% if kind == 'discovery' %}active{% endif %}">Discovery</a>
 </nav>
 

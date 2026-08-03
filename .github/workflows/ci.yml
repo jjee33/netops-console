@@ -21,9 +21,9 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -40,7 +40,7 @@ jobs:
         run: mypy
 
       - name: hadolint
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: docker/Dockerfile
           failure-threshold: warning
@@ -52,7 +52,7 @@ jobs:
         # Backstop for the one mistake this public repo cannot take back: the
         # runtime generates key material, and a stray commit of it is
         # unrecoverable once pushed.
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Pointed at explicitly: the action does not reliably pick up a
@@ -68,9 +68,9 @@ jobs:
         # 3.12 is the declared floor, 3.13 is what the image ships.
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -106,13 +106,13 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.imageid }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
@@ -125,7 +125,7 @@ jobs:
       - name: Save image
         run: docker save ${{ env.IMAGE }}:ci -o /tmp/image.tar
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ci-image
           path: /tmp/image.tar
@@ -136,9 +136,9 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ci-image
           path: /tmp

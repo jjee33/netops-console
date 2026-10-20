@@ -249,6 +249,49 @@ class TestChangeLog:
         audit = await auth_client.get("/audit")
         assert secret not in audit.text
 
+    async def test_deleting_credential_records_every_affected_device(
+        self, auth_client: httpx.AsyncClient
+    ) -> None:
+        secret = "synthetic-password-do-not-log-9f2c"
+        token = await csrf_token(auth_client, "/credentials")
+        await auth_client.post(
+            "/credentials",
+            data={
+                "name": "Shared login",
+                "username": "netops",
+                "auth_type": "password",
+                "secret": secret,
+                "csrf_token": token,
+            },
+        )
+        from app.models import Credential, DeviceCredential
+
+        first, second = await _device("10.0.30.5"), await _device("10.0.30.6")
+        async with get_session_factory()() as session:
+            credential_id = await session.scalar(select(Credential.id))
+            assert credential_id is not None
+            session.add_all(
+                [
+                    DeviceCredential(device_id=device_id, credential_id=credential_id)
+                    for device_id in (first, second)
+                ]
+            )
+            await session.commit()
+
+        await auth_client.post(f"/credentials/{credential_id}/delete", data={"csrf_token": token})
+        events = await _changes()
+        assert [(event.kind, event.device_id) for event in events] == [
+            ("credential_created", None),
+            ("credential_unassigned", first),
+            ("credential_unassigned", second),
+            ("credential_deleted", None),
+        ]
+        assert all(secret not in f"{event.subject} {event.detail}" for event in events)
+        for device_id in (first, second):
+            history = await auth_client.get(f"/devices/{device_id}/history")
+            assert "Credential unassigned" in history.text
+            assert "Shared login" in history.text
+
     async def test_action_lifecycle_is_recorded(self, auth_client: httpx.AsyncClient) -> None:
         token = await csrf_token(auth_client, "/actions")
         await auth_client.post(

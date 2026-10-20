@@ -46,6 +46,8 @@ nothing runs on its own.
   literals to the audit log, where hardcoded secrets could otherwise leak.
 - Credential, host-key and settings changes now commit atomically with their
   change events, rather than leaving unaudited changes if recording fails.
+  Deleting a credential also records the lost assignment in each affected
+  device's history before the association rows cascade away.
 - Updated minimum cryptography, asyncssh, pytest and pytest-asyncio versions
   to address known dependency advisories.
 - **Forgetting a host key erased the record of who had trusted it.** Revocation

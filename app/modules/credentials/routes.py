@@ -12,10 +12,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import select
 
 from app.core.templating import render
 from app.core.validation import ValidationError, address_in_allowlist, is_blocked, parse_ipv4
-from app.models import Credential, Device
+from app.models import Credential, Device, DeviceCredential
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.credentials import service
 from app.modules.history.changes import record_change
@@ -109,6 +110,26 @@ async def delete_credential(
     if credential is None:
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
+    # The FK cascade erases assignment rows. Snapshot affected devices first
+    # and write one event per device in the same transaction as the deletion.
+    assigned_devices = list(
+        await session.scalars(
+            select(Device)
+            .join(DeviceCredential, DeviceCredential.device_id == Device.id)
+            .where(DeviceCredential.credential_id == credential_id)
+            .order_by(Device.id)
+        )
+    )
+    for device in assigned_devices:
+        record_change(
+            session,
+            request,
+            user,
+            "credential_unassigned",
+            device=device,
+            subject=credential.name,
+            detail="Credential deleted; assignment removed",
+        )
     await session.delete(credential)
     record_change(
         session,

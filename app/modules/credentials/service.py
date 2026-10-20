@@ -96,19 +96,8 @@ async def list_all(session: AsyncSession) -> list[Credential]:
     return list(await session.scalars(select(Credential).order_by(Credential.name)))
 
 
-async def assign(session: AsyncSession, device_id: int, credential_id: int) -> None:
-    existing = await session.scalar(
-        select(DeviceCredential).where(
-            DeviceCredential.device_id == device_id,
-            DeviceCredential.credential_id == credential_id,
-        )
-    )
-    if existing is None:
-        session.add(DeviceCredential(device_id=device_id, credential_id=credential_id))
-        await session.commit()
-
-
-async def unassign(session: AsyncSession, device_id: int, credential_id: int) -> None:
+async def assign(session: AsyncSession, device_id: int, credential_id: int) -> bool:
+    """Assign a credential to a device. Returns False if it already was."""
     existing = await session.scalar(
         select(DeviceCredential).where(
             DeviceCredential.device_id == device_id,
@@ -116,8 +105,25 @@ async def unassign(session: AsyncSession, device_id: int, credential_id: int) ->
         )
     )
     if existing is not None:
-        await session.delete(existing)
-        await session.commit()
+        return False
+    session.add(DeviceCredential(device_id=device_id, credential_id=credential_id))
+    await session.commit()
+    return True
+
+
+async def unassign(session: AsyncSession, device_id: int, credential_id: int) -> bool:
+    """Remove an assignment. Returns False if there was none."""
+    existing = await session.scalar(
+        select(DeviceCredential).where(
+            DeviceCredential.device_id == device_id,
+            DeviceCredential.credential_id == credential_id,
+        )
+    )
+    if existing is None:
+        return False
+    await session.delete(existing)
+    await session.commit()
+    return True
 
 
 async def for_device(session: AsyncSession, device_id: int) -> list[Credential]:

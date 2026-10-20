@@ -7,9 +7,14 @@ copied into every backup taken from then on.
 
 Both tables are pruned together and to the same window, because they are the
 same kind of record and an operator setting "keep 90 days" means all of it.
+Per-host scan observations follow the same window for the same reason: there is
+one per device per scan, and they are what device history is built from, so
+"keep 90 days" bounds how far back that history reaches.
+
 Discovery runs are deliberately left alone: they are small, there is one per
 scan rather than one per click, and they are the cheapest answer to "when did
-this device first appear on my network".
+this device first appear on my network". So is the change log, which grows only
+when an operator changes something.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ActionExecution, DiagnosticResult
+from app.models import ActionExecution, DiagnosticResult, DiscoveryObservation
 
 logger = logging.getLogger("netops.retention")
 
@@ -30,10 +35,11 @@ logger = logging.getLogger("netops.retention")
 class PruneResult:
     diagnostics: int
     actions: int
+    observations: int = 0
 
     @property
     def total(self) -> int:
-        return self.diagnostics + self.actions
+        return self.diagnostics + self.actions + self.observations
 
 
 async def prune(session: AsyncSession, retention_days: int) -> PruneResult:
@@ -54,6 +60,9 @@ async def prune(session: AsyncSession, retention_days: int) -> PruneResult:
     actions = await session.execute(
         delete(ActionExecution).where(ActionExecution.started_at < cutoff)
     )
+    observations = await session.execute(
+        delete(DiscoveryObservation).where(DiscoveryObservation.observed_at < cutoff)
+    )
     await session.commit()
 
     # CursorResult carries rowcount; the base Result type does not, and mypy
@@ -61,13 +70,16 @@ async def prune(session: AsyncSession, retention_days: int) -> PruneResult:
     result = PruneResult(
         diagnostics=getattr(diagnostics, "rowcount", 0) or 0,
         actions=getattr(actions, "rowcount", 0) or 0,
+        observations=getattr(observations, "rowcount", 0) or 0,
     )
 
     if result.total:
         logger.info(
-            "pruned %d diagnostic result(s) and %d action execution(s) older than %d days",
+            "pruned %d diagnostic result(s), %d action execution(s) and %d scan "
+            "observation(s) older than %d days",
             result.diagnostics,
             result.actions,
+            result.observations,
             retention_days,
         )
     return result

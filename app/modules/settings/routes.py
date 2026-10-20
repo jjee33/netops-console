@@ -11,6 +11,7 @@ from fastapi.responses import Response
 from app.core.templating import render
 from app.core.validation import ValidationError
 from app.modules.auth.dependencies import ActiveUser, SessionDep
+from app.modules.history.changes import describe_changes, record_change
 from app.modules.settings import service
 
 logger = logging.getLogger("netops.settings")
@@ -25,6 +26,17 @@ def _context(settings: service.AppSettings, **extra: object) -> dict[str, object
         "error": None,
         "saved": False,
         **extra,
+    }
+
+
+def _comparable(settings: service.AppSettings) -> dict[str, object]:
+    return {
+        "allowed ranges": ", ".join(settings.allowed_cidrs) or None,
+        "scan host cap": settings.max_scan_hosts,
+        "concurrent scans": settings.max_concurrent_scans,
+        "concurrent executions": settings.max_concurrent_executions,
+        "retention days": settings.retention_days,
+        "strict host keys": settings.strict_host_keys,
     }
 
 
@@ -46,6 +58,7 @@ async def update_settings(
     retention_days: Annotated[str, Form()],
     strict_host_keys: Annotated[str | None, Form()] = None,
 ) -> Response:
+    previous = await service.load(session)
     try:
         settings = await service.save(
             session,
@@ -66,6 +79,11 @@ async def update_settings(
             _context(current, error=str(exc), allowed_cidrs_text=allowed_cidrs),
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    detail = describe_changes(_comparable(previous), _comparable(settings))
+    if detail:
+        record_change(session, request, user, "settings_changed", detail=detail)
+        await session.commit()
 
     logger.info("settings updated by %r: cidrs=%s", user.username, settings.allowed_cidrs)
     return render(request, "settings.html", _context(settings, saved=True))

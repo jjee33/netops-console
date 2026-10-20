@@ -18,6 +18,7 @@ from app.core.validation import ValidationError
 from app.models import Credential, Device
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.credentials import service
+from app.modules.history.changes import record_change
 from app.modules.ssh import client as ssh_client
 
 logger = logging.getLogger("netops.credentials")
@@ -74,6 +75,17 @@ async def create_credential(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    record_change(
+        session,
+        request,
+        user,
+        "credential_created",
+        subject=name.strip(),
+        # Name, username and type only. Nothing derived from the secret.
+        detail=f"username {username.strip()}, {auth_type.replace('_', ' ')}",
+    )
+    await session.commit()
+
     logger.info("credential %r created by %r", name, user.username)
     return RedirectResponse("/credentials", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -87,6 +99,14 @@ async def delete_credential(
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
     await session.delete(credential)
+    record_change(
+        session,
+        request,
+        user,
+        "credential_deleted",
+        subject=credential.name,
+        detail=f"username {credential.username}; its device assignments were removed with it",
+    )
     await session.commit()
 
     logger.info("credential %r deleted by %r", credential.name, user.username)
@@ -106,10 +126,28 @@ async def assign_credential(
     if device is None or device.is_deleted:
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
+    credential = await session.get(Credential, credential_id)
+    if credential is None:
+        return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
+
     if unassign is not None:
-        await service.unassign(session, device_id, credential_id)
+        changed = await service.unassign(session, device_id, credential_id)
+        kind = "credential_unassigned"
     else:
-        await service.assign(session, device_id, credential_id)
+        changed = await service.assign(session, device_id, credential_id)
+        kind = "credential_assigned"
+
+    if changed:
+        record_change(
+            session,
+            request,
+            user,
+            kind,
+            device=device,
+            subject=credential.name,
+            detail=f"username {credential.username}",
+        )
+        await session.commit()
 
     return RedirectResponse(f"/devices/{device_id}", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -197,6 +235,16 @@ async def trust_host_key(
         )
 
     await service.trust(session, device, presented, user_id=user.id, username=user.username)
+    record_change(
+        session,
+        request,
+        user,
+        "host_key_trusted",
+        device=device,
+        subject=presented.fingerprint,
+        detail=f"{presented.key_type} key trusted after review",
+    )
+    await session.commit()
 
     return RedirectResponse(f"/devices/{device_id}", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -209,7 +257,24 @@ async def revoke_host_key(
     if device is None:
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
+    # Read before deleting: revoking removes the record of who trusted which
+    # key, so the change log is the only place that survives it.
+    previous = await service.host_keys_for(session, device_id)
     removed = await service.revoke_host_key(session, device_id)
+    if removed:
+        record_change(
+            session,
+            request,
+            user,
+            "host_key_revoked",
+            device=device,
+            subject=", ".join(record.fingerprint for record in previous),
+            detail="; ".join(
+                f"{record.key_type} trusted by {record.trusted_by_snapshot or 'unknown'}"
+                for record in previous
+            ),
+        )
+        await session.commit()
     logger.warning("%d host key(s) revoked for device %s by %r", removed, device_id, user.username)
 
     return RedirectResponse(f"/devices/{device_id}", status_code=status.HTTP_303_SEE_OTHER)

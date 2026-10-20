@@ -20,6 +20,7 @@ from app.core.validation import ValidationError
 from app.models import ActionDefinition, Device
 from app.modules.actions import service
 from app.modules.auth.dependencies import ActiveUser, SessionDep
+from app.modules.history.changes import record_change
 from app.modules.settings import service as settings_service
 
 logger = logging.getLogger("netops.actions")
@@ -115,6 +116,15 @@ async def create_action(
         applicable_types=[entry.strip() for entry in applicable_types.split(",") if entry.strip()],
     )
     session.add(definition)
+    record_change(
+        session,
+        request,
+        user,
+        "action_created",
+        subject=definition.name,
+        # The template is the substance of an action, so it is recorded in full.
+        detail=f"{definition.execution_type}: {' '.join(definition.argv_template)}",
+    )
     await session.commit()
 
     logger.info("action %r created by %r", definition.name, user.username)
@@ -130,6 +140,13 @@ async def toggle_action(
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
     definition.enabled = not definition.enabled
+    record_change(
+        session,
+        request,
+        user,
+        "action_enabled" if definition.enabled else "action_disabled",
+        subject=definition.name,
+    )
     await session.commit()
 
     logger.info(
@@ -152,6 +169,14 @@ async def delete_action(
     # The definition goes; its execution history does not. The foreign key is
     # SET NULL and the name is snapshotted on every row.
     await session.delete(definition)
+    record_change(
+        session,
+        request,
+        user,
+        "action_deleted",
+        subject=definition.name,
+        detail=f"{definition.execution_type}: {' '.join(definition.argv_template)}",
+    )
     await session.commit()
 
     logger.info("action %r deleted by %r", definition.name, user.username)

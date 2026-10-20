@@ -10,6 +10,8 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.6] — 2026-10-20
+
 Inventory and diagnostics you can reason about after the fact: what changed,
 when, and what a failed check most likely means. No new execution surface, and
 nothing runs on its own.
@@ -308,7 +310,8 @@ Delivery pipeline and container foundation. No usable application.
   asserts capabilities, the non-root UID, loopback-only binding, and SQLite pragmas.
 - Release pipeline publishing signed multi-arch images with SBOM and provenance.
 
-[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.5...HEAD
+[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.6...HEAD
+[0.1.0-alpha.6]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.5...v0.1.0-alpha.6
 [0.1.0-alpha.5]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.4...v0.1.0-alpha.5
 [0.1.0-alpha.4]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.3...v0.1.0-alpha.4
 [0.1.0-alpha.3]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.2...v0.1.0-alpha.3

@@ -68,6 +68,7 @@ async def update_settings(
             max_concurrent_executions=max_concurrent_executions,
             retention_days=retention_days,
             strict_host_keys=strict_host_keys is not None,
+            commit=False,
         )
     except ValidationError as exc:
         # Re-render with what the operator typed rather than what was stored,
@@ -83,7 +84,7 @@ async def update_settings(
     detail = describe_changes(_comparable(previous), _comparable(settings))
     if detail:
         record_change(session, request, user, "settings_changed", detail=detail)
-        await session.commit()
+    await session.commit()
 
     logger.info("settings updated by %r: cidrs=%s", user.username, settings.allowed_cidrs)
     return render(request, "settings.html", _context(settings, saved=True))

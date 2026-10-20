@@ -40,6 +40,14 @@ nothing runs on its own.
   `make backup` now runs it.
 
 ### Security
+- Host-key probe and trust now revalidate stored device addresses against the
+  current allowlist and reserved ranges before opening a network connection.
+- Action definition/deletion events no longer copy arbitrary command-template
+  literals to the audit log, where hardcoded secrets could otherwise leak.
+- Credential, host-key and settings changes now commit atomically with their
+  change events, rather than leaving unaudited changes if recording fails.
+- Updated minimum cryptography, asyncssh, pytest and pytest-asyncio versions
+  to address known dependency advisories.
 - **Forgetting a host key erased the record of who had trusted it.** Revocation
   deleted the trust row, so the only evidence was the process log. The change
   log now keeps who trusted which fingerprint and who revoked it.

@@ -55,6 +55,7 @@ async def create(
     secret: str,
     passphrase: str | None = None,
     description: str | None = None,
+    commit: bool = True,
 ) -> Credential:
     """Store a credential. The plaintext does not survive this call."""
     if not name.strip():
@@ -86,7 +87,8 @@ async def create(
         key_fingerprint=fingerprint,
     )
     session.add(credential)
-    await session.commit()
+    if commit:
+        await session.commit()
 
     logger.info("credential %r stored (%s)", credential.name, auth_type)
     return credential
@@ -96,7 +98,9 @@ async def list_all(session: AsyncSession) -> list[Credential]:
     return list(await session.scalars(select(Credential).order_by(Credential.name)))
 
 
-async def assign(session: AsyncSession, device_id: int, credential_id: int) -> bool:
+async def assign(
+    session: AsyncSession, device_id: int, credential_id: int, *, commit: bool = True
+) -> bool:
     """Assign a credential to a device. Returns False if it already was."""
     existing = await session.scalar(
         select(DeviceCredential).where(
@@ -107,11 +111,14 @@ async def assign(session: AsyncSession, device_id: int, credential_id: int) -> b
     if existing is not None:
         return False
     session.add(DeviceCredential(device_id=device_id, credential_id=credential_id))
-    await session.commit()
+    if commit:
+        await session.commit()
     return True
 
 
-async def unassign(session: AsyncSession, device_id: int, credential_id: int) -> bool:
+async def unassign(
+    session: AsyncSession, device_id: int, credential_id: int, *, commit: bool = True
+) -> bool:
     """Remove an assignment. Returns False if there was none."""
     existing = await session.scalar(
         select(DeviceCredential).where(
@@ -122,7 +129,8 @@ async def unassign(session: AsyncSession, device_id: int, credential_id: int) ->
     if existing is None:
         return False
     await session.delete(existing)
-    await session.commit()
+    if commit:
+        await session.commit()
     return True
 
 
@@ -166,6 +174,7 @@ async def trust(
     *,
     user_id: int | None,
     username: str | None,
+    commit: bool = True,
 ) -> SshHostKey:
     """Record an operator's decision to accept a host key.
 
@@ -196,7 +205,8 @@ async def trust(
         existing.trusted_at = datetime.now(UTC)
         existing.trusted_by_user_id = user_id
         existing.trusted_by_snapshot = username
-        await session.commit()
+        if commit:
+            await session.commit()
         return existing
 
     record = SshHostKey(
@@ -208,13 +218,14 @@ async def trust(
         trusted_by_snapshot=username,
     )
     session.add(record)
-    await session.commit()
+    if commit:
+        await session.commit()
 
     logger.info("host key %s for device %s trusted by %r", key.fingerprint, device.id, username)
     return record
 
 
-async def revoke_host_key(session: AsyncSession, device_id: int) -> int:
+async def revoke_host_key(session: AsyncSession, device_id: int, *, commit: bool = True) -> int:
     """Forget every trusted key for a device.
 
     Needed when a device is legitimately rebuilt: the next connection then goes
@@ -224,6 +235,7 @@ async def revoke_host_key(session: AsyncSession, device_id: int) -> int:
     for record in records:
         await session.delete(record)
     if records:
-        await session.commit()
+        if commit:
+            await session.commit()
         logger.warning("host key trust revoked for device %s", device_id)
     return len(records)

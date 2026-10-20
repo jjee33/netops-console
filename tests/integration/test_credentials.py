@@ -172,6 +172,45 @@ class TestAssignment:
 
 
 class TestHostKeyTrust:
+    @pytest.mark.parametrize("ip", ["169.254.169.254", "127.0.0.1", "10.99.99.99"])
+    async def test_probe_and_trust_refuse_out_of_scope_without_network_contact(
+        self, auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, ip: str
+    ) -> None:
+        device_id = await _device(ip)
+        async with get_session_factory()() as session:
+            from app.modules.settings import service as settings_service
+
+            await settings_service.save(
+                session,
+                allowed_cidrs_raw="10.0.30.0/24",
+                max_scan_hosts="1024",
+                max_concurrent_scans="1",
+                max_concurrent_executions="4",
+                retention_days="90",
+                strict_host_keys=True,
+            )
+
+        async def forbidden_probe(*args: object, **kwargs: object) -> None:
+            pytest.fail("out-of-scope host key probe reached the network")
+
+        monkeypatch.setattr(service, "probe", forbidden_probe)
+        token = await csrf_token(auth_client, f"/devices/{device_id}")
+        probe = await auth_client.post(
+            f"/devices/{device_id}/hostkey/probe", data={"csrf_token": token}
+        )
+        trust = await auth_client.post(
+            f"/devices/{device_id}/hostkey/trust",
+            data={
+                "csrf_token": token,
+                "fingerprint": "SHA256:fake",
+                "key_type": "ssh-ed25519",
+                "key_base64": "AAAA",
+            },
+        )
+        assert probe.status_code == 200 and trust.status_code == 200
+        assert "outside the currently allowed ranges" in probe.text
+        assert "outside the currently allowed ranges" in trust.text
+
     async def test_a_device_starts_untrusted(self, migrated) -> None:
         device_id = await _device()
         async with get_session_factory()() as session:

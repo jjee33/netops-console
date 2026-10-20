@@ -14,16 +14,26 @@ from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import RedirectResponse, Response
 
 from app.core.templating import render
-from app.core.validation import ValidationError
+from app.core.validation import ValidationError, address_in_allowlist, is_blocked, parse_ipv4
 from app.models import Credential, Device
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.credentials import service
 from app.modules.history.changes import record_change
+from app.modules.settings import service as settings_service
 from app.modules.ssh import client as ssh_client
 
 logger = logging.getLogger("netops.credentials")
 
 router = APIRouter(tags=["credentials"])
+
+
+async def _probe_in_scope(session: SessionDep, device: Device) -> ssh_client.PresentedKey:
+    """An inventory row is not permission to contact a stale address."""
+    address = parse_ipv4(device.ip_address)
+    settings = await settings_service.load(session)
+    if is_blocked(address) or not address_in_allowlist(address, settings.allowed_networks):
+        raise ValidationError("This device is outside the currently allowed ranges.")
+    return await service.probe(device)
 
 
 @router.get("/credentials")
@@ -56,6 +66,7 @@ async def create_credential(
             secret=secret,
             passphrase=passphrase or None,
             description=description,
+            commit=False,
         )
     except ValidationError as exc:
         return render(
@@ -131,10 +142,10 @@ async def assign_credential(
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
     if unassign is not None:
-        changed = await service.unassign(session, device_id, credential_id)
+        changed = await service.unassign(session, device_id, credential_id, commit=False)
         kind = "credential_unassigned"
     else:
-        changed = await service.assign(session, device_id, credential_id)
+        changed = await service.assign(session, device_id, credential_id, commit=False)
         kind = "credential_assigned"
 
     if changed:
@@ -166,8 +177,8 @@ async def probe_host_key(
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
     try:
-        key = await service.probe(device)
-    except ssh_client.SshError as exc:
+        key = await _probe_in_scope(session, device)
+    except (ssh_client.SshError, ValidationError) as exc:
         return render(
             request,
             "partials/host_key_review.html",
@@ -203,8 +214,8 @@ async def trust_host_key(
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
     try:
-        presented = await service.probe(device)
-    except ssh_client.SshError as exc:
+        presented = await _probe_in_scope(session, device)
+    except (ssh_client.SshError, ValidationError) as exc:
         return render(
             request,
             "partials/host_key_review.html",
@@ -234,7 +245,9 @@ async def trust_host_key(
             status_code=status.HTTP_409_CONFLICT,
         )
 
-    await service.trust(session, device, presented, user_id=user.id, username=user.username)
+    await service.trust(
+        session, device, presented, user_id=user.id, username=user.username, commit=False
+    )
     record_change(
         session,
         request,
@@ -260,7 +273,7 @@ async def revoke_host_key(
     # Read before deleting: revoking removes the record of who trusted which
     # key, so the change log is the only place that survives it.
     previous = await service.host_keys_for(session, device_id)
-    removed = await service.revoke_host_key(session, device_id)
+    removed = await service.revoke_host_key(session, device_id, commit=False)
     if removed:
         record_change(
             session,

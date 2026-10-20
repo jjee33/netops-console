@@ -275,7 +275,28 @@ class TestChangeLog:
             "action_disabled",
             "action_deleted",
         ]
-        assert events[0].detail == "local: ip route show"
+        assert events[0].detail == "local action defined"
+
+    async def test_action_template_literal_is_not_copied_to_audit(
+        self, auth_client: httpx.AsyncClient
+    ) -> None:
+        secret = "synthetic-token-do-not-log-9f2c"
+        token = await csrf_token(auth_client, "/actions")
+        response = await auth_client.post(
+            "/actions",
+            data={
+                "name": "Show routes",
+                "execution_type": "local",
+                "argv_template": json.dumps(["ip", "route", "show", secret]),
+                "timeout_seconds": "10",
+                "csrf_token": token,
+            },
+        )
+        assert response.status_code == 303
+        events = await _changes()
+        assert len(events) == 1
+        assert secret not in (events[0].detail or "")
+        assert secret not in (await auth_client.get("/audit")).text
 
     async def test_settings_changes_name_the_fields(self, auth_client: httpx.AsyncClient) -> None:
         token = await csrf_token(auth_client, "/settings")

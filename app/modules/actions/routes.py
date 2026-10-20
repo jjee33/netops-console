@@ -122,8 +122,8 @@ async def create_action(
         user,
         "action_created",
         subject=definition.name,
-        # The template is the substance of an action, so it is recorded in full.
-        detail=f"{definition.execution_type}: {' '.join(definition.argv_template)}",
+        # Templates may contain literal secrets; do not copy argv into history.
+        detail=f"{definition.execution_type} action defined",
     )
     await session.commit()
 
@@ -175,7 +175,7 @@ async def delete_action(
         user,
         "action_deleted",
         subject=definition.name,
-        detail=f"{definition.execution_type}: {' '.join(definition.argv_template)}",
+        detail=f"{definition.execution_type} action deleted",
     )
     await session.commit()
 

@@ -143,8 +143,19 @@ async def device_list(
 
     devices = list(await session.scalars(statement.order_by(ordering).limit(500)))
 
+    # One grouped count instead of loading every port row for every device.
+    port_counts: dict[int, int] = {}
+    if devices:
+        rows = await session.execute(
+            select(DevicePort.device_id, func.count())
+            .where(DevicePort.device_id.in_([device.id for device in devices]))
+            .group_by(DevicePort.device_id)
+        )
+        port_counts = {device_id: count for device_id, count in rows.all()}
+
     context = {
         "devices": devices,
+        "port_counts": port_counts,
         "q": q,
         "sort": sort,
         "direction": direction,

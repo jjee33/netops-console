@@ -24,7 +24,7 @@
       <td>{{ device.vendor or '—' }}</td>
       <td><span class="badge badge-{{ device.status }}">{{ device.status }}</span></td>
       <td class="muted">{{ device.last_seen.strftime('%Y-%m-%d %H:%M') if device.last_seen else '—' }}</td>
-      <td class="muted">{{ device.ports | length }}</td>
+      <td class="muted">{{ port_counts.get(device.id, 0) }}</td>
     </tr>
     {% else %}
     <tr><td colspan="7" class="muted empty-row">

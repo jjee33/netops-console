@@ -93,8 +93,9 @@
     <span class="spinner" aria-hidden="true"></span> Running…
   </div>
 
-  {# Swap target. Replaced wholesale by each result. #}
-  <div id="diagnostic-result"></div>
+  {# Swap target, replaced wholesale by each result. The live region is the
+     wrapper, because a region that is itself swapped out is never announced. #}
+  <div aria-live="polite"><div id="diagnostic-result"></div></div>
 </section>
 
 {% if actions %}
@@ -130,7 +131,7 @@
   <div id="action-spinner" class="htmx-indicator">
     <span class="spinner" aria-hidden="true"></span> Running…
   </div>
-  <div id="action-result"></div>
+  <div aria-live="polite"><div id="action-result"></div></div>
 </section>
 {% endif %}
 

@@ -107,8 +107,14 @@ def port_labels(ports: Sequence[dict[str, Any]] | None) -> dict[str, str]:
 
 
 def _port_sort_key(label: str) -> tuple[str, int]:
+    """Order ``"22/tcp (ssh)"`` by protocol, then numerically by port.
+
+    Only the protocol token is compared, not the rest of the label: including
+    the service name sorted 443 (https) ahead of 22 (ssh).
+    """
     number, _, rest = label.partition("/")
-    return (rest, int(number) if number.isdigit() else 0)
+    protocol = rest.split(" ", 1)[0]
+    return (protocol, int(number) if number.isdigit() else 0)
 
 
 def diff_observations(before: DiscoveryObservation, after: DiscoveryObservation) -> ObservationDiff:

@@ -262,3 +262,27 @@ class TestPortCountColumn:
         second = next(row for row in rows if "10.0.60.2" in row)
         assert '<td class="muted">3</td>' in first
         assert '<td class="muted">0</td>' in second
+
+
+class TestSortLinksAndLandmarks:
+    async def test_sort_links_encode_the_search_and_keep_the_filter(
+        self, auth_client: httpx.AsyncClient
+    ) -> None:
+        """An "&" in the search used to end the query string early, and
+        sorting silently dropped the new-devices filter."""
+        response = await auth_client.get("/devices?q=a%26b&new=1")
+        assert "q=a%26b" in response.text
+        assert "q=a&b" not in response.text
+        assert "new=1" in response.text.split("<thead>")[1].split("</thead>")[0]
+
+    async def test_sorted_column_is_announced(self, auth_client: httpx.AsyncClient) -> None:
+        response = await auth_client.get("/devices?sort=vendor&direction=desc")
+        assert 'aria-sort="descending"' in response.text
+        assert response.text.count("aria-sort=") == 1
+
+    async def test_skip_link_and_current_page(self, auth_client: httpx.AsyncClient) -> None:
+        response = await auth_client.get("/devices")
+        assert 'href="#main"' in response.text
+        assert 'id="main"' in response.text
+        assert 'href="/devices" class="active" aria-current="page"' in response.text
+        assert response.text.count('aria-current="page"') == 1

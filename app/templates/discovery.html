@@ -62,7 +62,9 @@
 {% if active_run %}
 <section class="card">
   <h2>Current scan</h2>
+  <div aria-live="polite">
   {% with run = active_run %}{% include "partials/run_status.html" %}{% endwith %}
+  </div>
 </section>
 {% endif %}
 

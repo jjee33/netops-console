@@ -7,7 +7,7 @@
     {% for item in items %}
     <li>
       {% if item.device_id %}<a href="/devices/{{ item.device_id }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}
-      <code>{{ item.ip_address }}</code>
+      {% if item.label != item.ip_address %}<code>{{ item.ip_address }}</code>{% endif %}
       {% if item.lines %}
       <ul class="timeline-details">{% for line in item.lines %}<li>{{ line }}</li>{% endfor %}</ul>
       {% endif %}

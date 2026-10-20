@@ -13,7 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import Response
 
-from app.core.requests import client_ip
+from app.core.requests import client_ip, wants_partial
 from app.core.templating import render
 from app.core.validation import ValidationError
 from app.models import Device, DiagnosticResult
@@ -89,9 +89,11 @@ async def diagnostic_detail(
 
     device = await session.get(Device, result.device_id) if result.device_id else None
 
+    # The audit log links here directly, so a plain navigation gets a full page;
+    # it used to receive the bare fragment, with no layout and no viewport.
     return render(
         request,
-        "partials/diagnostic_result.html",
+        "partials/diagnostic_result.html" if wants_partial(request) else "diagnostic_detail.html",
         {
             "result": result,
             "spec": service.REGISTRY.get(result.type),

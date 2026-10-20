@@ -52,7 +52,7 @@
         <td>{% if row.present %}{{ row.mac_address or '—' }}{% else %}<span class="muted">—</span>{% endif %}</td>
         <td>{% if row.present %}{{ row.hostname or '—' }}{% else %}<span class="muted">—</span>{% endif %}</td>
         <td>{% if row.present %}{{ row.vendor or '—' }}{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td class="muted">{{ describe_ports(row.ports) if row.present else '—' }}</td>
+        <td class="muted ports-cell">{{ describe_ports(row.ports) if row.present else "—" }}</td>
       </tr>
       {% endfor %}
     </tbody>

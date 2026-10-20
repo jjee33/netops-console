@@ -73,6 +73,11 @@ class TestDiff:
     def test_empty_string_and_none_are_the_same(self) -> None:
         assert not diff_observations(obs(1, vendor=""), obs(2, vendor=None)).changed
 
+    def test_service_names_do_not_affect_port_order(self) -> None:
+        assert (
+            describe_ports([p(443, "https"), p(22, "ssh")]) == "open: 22/tcp (ssh), 443/tcp (https)"
+        )
+
     def test_ports_sort_numerically(self) -> None:
         diff = diff_observations(obs(1, ports=[]), obs(2, ports=[p(8080), p(22), p(443)]))
         assert diff.opened == ["22/tcp", "443/tcp", "8080/tcp"]

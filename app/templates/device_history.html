@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}History: {{ device.display_name }} — NetOps Console{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>History <span class="muted">— {{ device.display_name }}</span></h1>
+  <a href="/devices/{{ device.id }}">← Back to device</a>
+</div>
+
+<section class="card" aria-labelledby="coverage-heading">
+  <h2 id="coverage-heading">Scan coverage</h2>
+  {% set coverage = timeline.coverage %}
+  {% if coverage.scans %}
+  <p>
+    Included in <strong>{{ coverage.scans }}</strong> scan{{ '' if coverage.scans == 1 else 's' }}
+    that covered its address, and answered
+    <strong>{{ coverage.answered }}</strong> of them.
+    The most recent was
+    <a href="/discovery/runs/{{ coverage.last_run_id }}/report">scan #{{ coverage.last_run_id }}</a>,
+    in which it {{ 'answered' if coverage.last_present else 'did not answer' }}.
+  </p>
+  {% else %}
+  <p class="muted">
+    No per-host scan records yet. They are written by scans run on this version
+    or later; earlier scans kept only their summary counts.
+  </p>
+  {% endif %}
+  <p class="field-hint">
+    Only scans you ran are recorded — between scans nothing is known, so nothing
+    is shown. A scan that saw exactly what the previous one saw adds no entry
+    below; it is counted here instead.
+  </p>
+</section>
+
+<section class="card" aria-labelledby="timeline-heading">
+  <h2 id="timeline-heading">Timeline</h2>
+  {% with events = timeline.events %}{% include "partials/timeline.html" %}{% endwith %}
+  {% if timeline.truncated %}
+  <p class="field-hint">
+    Showing the most recent {{ timeline.events | length }} events. The
+    <a href="/audit">audit log</a> holds everything within the retention window.
+  </p>
+  {% endif %}
+</section>
+{% endblock %}

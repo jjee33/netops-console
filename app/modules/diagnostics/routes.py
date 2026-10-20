@@ -19,6 +19,7 @@ from app.core.validation import ValidationError
 from app.models import Device, DiagnosticResult
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.diagnostics import service
+from app.modules.diagnostics.explain import explain_diagnostic
 from app.modules.settings import service as settings_service
 
 logger = logging.getLogger("netops.diagnostics")
@@ -73,6 +74,7 @@ async def run_diagnostic(
             "spec": service.REGISTRY[kind],
             "summary": service.result_summary(result),
             "device": device,
+            "explanation": explain_diagnostic(result),
         },
     )
 
@@ -95,5 +97,6 @@ async def diagnostic_detail(
             "spec": service.REGISTRY.get(result.type),
             "summary": service.result_summary(result),
             "device": device,
+            "explanation": explain_diagnostic(result),
         },
     )

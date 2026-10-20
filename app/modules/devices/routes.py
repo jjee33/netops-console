@@ -17,6 +17,7 @@ from app.modules.actions import service as actions_service
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.credentials import service as credentials_service
 from app.modules.diagnostics import service as diagnostics_service
+from app.modules.history import service as history_service
 from app.modules.history.changes import describe_changes, record_change
 from app.modules.settings import service as settings_service
 
@@ -183,6 +184,9 @@ async def device_detail(
             "assigned_credentials": await credentials_service.for_device(session, device.id),
             "all_credentials": await credentials_service.list_all(session),
             "host_keys": await credentials_service.host_keys_for(session, device.id),
+            "recent_events": (
+                await history_service.device_timeline(session, device, limit=5)
+            ).events,
         },
     )
 

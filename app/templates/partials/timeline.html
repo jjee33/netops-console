@@ -1,0 +1,28 @@
+{# Device timeline. Each event is a record something else wrote: a scan
+   observation, a check, an action, an operator change. Nothing is inferred
+   between them. #}
+{% if events %}
+<ol class="timeline">
+  {% for event in events %}
+  <li class="timeline-item tone-{{ event.tone }}">
+    <div class="timeline-meta">
+      <time datetime="{{ event.when.isoformat() }}">{{ event.when.strftime('%Y-%m-%d %H:%M') }}</time>
+      <span class="timeline-category">{{ event.category }}</span>
+    </div>
+    <div class="timeline-body">
+      <p class="timeline-title">
+        {% if event.link %}<a href="{{ event.link }}">{{ event.title }}</a>{% else %}{{ event.title }}{% endif %}
+      </p>
+      {% if event.details %}
+      <ul class="timeline-details">
+        {% for line in event.details %}<li>{{ line }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if event.actor %}<p class="muted timeline-actor">by {{ event.actor }}</p>{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="muted">Nothing recorded for this device yet.</p>
+{% endif %}

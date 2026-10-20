@@ -22,6 +22,23 @@ from app.core.requests import client_ip
 from app.models import ChangeEvent, Device, User
 from app.models.change import CHANGE_KINDS
 
+# How each kind reads in the audit log and on a device timeline.
+CHANGE_LABELS: dict[str, str] = {
+    "device_edited": "Device details edited",
+    "device_removed": "Removed from the inventory",
+    "host_key_trusted": "SSH host key trusted",
+    "host_key_revoked": "SSH host key forgotten",
+    "credential_created": "Credential added",
+    "credential_deleted": "Credential deleted",
+    "credential_assigned": "Credential assigned",
+    "credential_unassigned": "Credential unassigned",
+    "action_created": "Action defined",
+    "action_enabled": "Action enabled",
+    "action_disabled": "Action disabled",
+    "action_deleted": "Action deleted",
+    "settings_changed": "Settings changed",
+}
+
 # Long free text (device notes, mostly) is summarised rather than copied: the
 # change log says *that* it changed, and the device page holds the value.
 MAX_VALUE_CHARS = 80

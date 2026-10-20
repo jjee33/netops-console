@@ -1,0 +1,19 @@
+{# A rule-based reading of a result: what it most likely means and what to try
+   next. Every string here is either fixed text from the explain modules or a
+   value already escaped by autoescaping — never |safe. #}
+{% if explanation %}
+<div class="explanation" role="note" aria-label="What this result means">
+  <p class="explanation-headline"><strong>{{ explanation.headline }}</strong></p>
+  {% if explanation.evidence %}
+  <p class="explanation-evidence"><span class="muted">Based on:</span> {{ explanation.evidence }}</p>
+  {% endif %}
+  {% if explanation.causes %}
+  <p class="explanation-label">Likely causes</p>
+  <ul>{% for cause in explanation.causes %}<li>{{ cause }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if explanation.next_steps %}
+  <p class="explanation-label">Try next</p>
+  <ul>{% for step in explanation.next_steps %}<li>{{ step }}</li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% endif %}

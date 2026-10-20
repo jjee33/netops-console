@@ -1,7 +1,8 @@
 """Audit log.
 
 A single chronological view over everything the application has done —
-diagnostics, actions and discovery runs. Kept as one timeline rather than
+diagnostics, actions, discovery runs, and operator changes to inventory, trust
+and configuration. Kept as one timeline rather than
 per-feature tables because the question an operator actually asks is "what
 happened to my network", not "what did the diagnostics subsystem do".
 
@@ -22,9 +23,10 @@ from fastapi.responses import Response
 from sqlalchemy import select
 
 from app.core.templating import render
-from app.models import ActionExecution, DiagnosticResult, DiscoveryRun
+from app.models import ActionExecution, ChangeEvent, DiagnosticResult, DiscoveryRun
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.diagnostics import service as diagnostics_service
+from app.modules.history.changes import CHANGE_LABELS
 
 logger = logging.getLogger("netops.audit")
 
@@ -37,7 +39,7 @@ PAGE_SIZE = 50
 class AuditEntry:
     """One row of the timeline, whatever it came from."""
 
-    kind: Literal["diagnostic", "action", "discovery"]
+    kind: Literal["diagnostic", "action", "discovery", "change"]
     when: datetime
     action: str
     target: str
@@ -92,6 +94,26 @@ def _from_run(run: DiscoveryRun) -> AuditEntry:
         username=run.username_snapshot,
         client_ip=run.client_ip,
         duration_ms=run.duration_ms,
+        link=f"/discovery/runs/{run.id}/report",
+    )
+
+
+def _from_change(event: ChangeEvent) -> AuditEntry:
+    detail = " — ".join(part for part in (event.subject, event.detail) if part)
+    return AuditEntry(
+        kind="change",
+        when=event.created_at,
+        action=CHANGE_LABELS.get(event.kind, event.kind),
+        target=event.device_label_snapshot
+        or ("Settings" if event.kind == "settings_changed" else "—"),
+        # A change is a record that something was done, not an attempt that
+        # can succeed or fail; refusals are never written as changes.
+        status="recorded",
+        detail=detail,
+        username=event.username_snapshot,
+        client_ip=event.client_ip,
+        duration_ms=None,
+        link=f"/devices/{event.device_id}/history" if event.device_id else None,
     )
 
 
@@ -142,6 +164,14 @@ async def audit_log(
         if cursor:
             runs = runs.where(DiscoveryRun.started_at < cursor)
         entries += [_from_run(row) for row in await session.scalars(runs.limit(PAGE_SIZE + 1))]
+
+    if kind in ("", "change"):
+        changes = select(ChangeEvent).order_by(ChangeEvent.created_at.desc())
+        if cursor:
+            changes = changes.where(ChangeEvent.created_at < cursor)
+        entries += [
+            _from_change(row) for row in await session.scalars(changes.limit(PAGE_SIZE + 1))
+        ]
 
     entries.sort(key=lambda entry: entry.when, reverse=True)
     page = entries[:PAGE_SIZE]

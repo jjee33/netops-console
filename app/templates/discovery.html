@@ -67,7 +67,10 @@
 {% endif %}
 
 <section class="card">
-  <h2>History</h2>
+  <div class="page-header">
+    <h2>History</h2>
+    <a href="/discovery/compare">Compare two scans →</a>
+  </div>
   {% if runs %}
   <table class="data-table compact">
     <thead>
@@ -76,7 +79,7 @@
     <tbody>
       {% for run in runs %}
       <tr>
-        <td class="muted">{{ run.started_at.strftime('%Y-%m-%d %H:%M') if run.started_at else '—' }}</td>
+        <td class="muted"><a href="/discovery/runs/{{ run.id }}/report">#{{ run.id }}</a> · {{ run.started_at.strftime('%Y-%m-%d %H:%M') if run.started_at else '—' }}</td>
         <td><code>{{ run.subnet }}</code></td>
         <td><span class="badge badge-run-{{ run.status }}">{{ run.status }}</span></td>
         <td>{{ run.devices_found }}</td>

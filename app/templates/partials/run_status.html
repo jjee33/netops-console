@@ -12,9 +12,11 @@
   {% elif run.status == 'success' %}
     <strong>Scan of {{ run.subnet }} complete.</strong>
     <p>{{ run.output_summary }}
-       {% if run.devices_found %}<a href="/devices">View devices</a>{% endif %}</p>
+       <a href="/discovery/runs/{{ run.id }}/report">Scan report</a>
+       {% if run.devices_found %}· <a href="/devices">View devices</a>{% endif %}</p>
   {% else %}
     <strong>Scan of {{ run.subnet }} {{ run.status }}.</strong>
     <p class="muted">{{ run.output_summary or 'No detail recorded.' }}</p>
+    <p><a href="/discovery/runs/{{ run.id }}/report">What this means →</a></p>
   {% endif %}
 </div>

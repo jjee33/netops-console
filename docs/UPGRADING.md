@@ -35,12 +35,43 @@ NETOPS_VERSION=v0.1.0 docker compose up -d
 
 This is why the first line of the upgrade procedure is a backup.
 
+### Rolling back one migration without a restore
+
+If you have kept writing to the database since upgrading and would rather not
+lose that, you can step the schema back with the **newer** image, then start the
+older one. Every migration in this project ships a downgrade, and CI checks that
+they reverse cleanly.
+
+```bash
+docker compose exec app python -m app.cli backup /data/pre-rollback.db   # always
+docker compose exec app alembic downgrade <revision the older version expects>
+docker compose down
+NETOPS_VERSION=<older tag> docker compose up -d
+```
+
+The older image cannot do this itself: it does not contain the newer
+migration's downgrade step. A downgrade drops whatever that migration added;
+the changelog entry for each migration says what that is. Restoring a backup is
+still the simplest rollback and the one to prefer.
+
+### Revision reference
+
+| Version | Head revision | Adds |
+|---|---|---|
+| `0.1.0-alpha.5` | `36c5a90d852f` | — |
+| Unreleased | `4cdd051ae46a` | `discovery_observation`, `change_event`, `discovery_run.scanned_ports`. Additive; downgrading to `36c5a90d852f` drops per-host scan history and the change log and touches nothing else |
+
+`verify-backup` reports the revision a backup is at, and whether this version
+can run it.
+
 ## After upgrading
 
 Worth a quick pass, particularly across a minor version:
 
 - Log in.
 - Run one discovery scan and confirm devices still populate with MAC and vendor data.
+  Its report (Discovery → History → the run number) should list hosts; scans
+  from before an upgrade that introduced per-host history say so instead.
 - Run one diagnostic from a device page.
 - If you use SSH actions, run one and confirm the stored credential still decrypts.
 

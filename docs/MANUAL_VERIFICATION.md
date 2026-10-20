@@ -40,6 +40,10 @@ shows your real interfaces rather than an `eth0@if…` bridge pair.
 Devices *across a router* legitimately have no MAC. That is expected, not a
 failure — compare a device on your own segment with one that is routed.
 
+The scan report (Discovery → History → run number) flags a run in which no
+responding host had a MAC address. On a directly attached subnet that flag is
+the fail condition above; on a routed one it is expected. Note which you saw.
+
 ## 2. Raw sockets actually work
 
 ```bash
@@ -74,6 +78,12 @@ found > 0 and new = 0.
 
 Also worth doing once: rename a device, add notes, rescan, and confirm your name
 and notes survived. Discovery must never overwrite something you typed.
+
+Then open **Compare two scans**. The two runs should show the same hosts as
+*unchanged*, and the device's **History** should show the rename under
+*Device details edited* and no scan entry for the second, identical scan. If a
+DHCP client changed address between the scans, it must appear as *changed*
+with the old and new address, not as one host missing and another new.
 
 ## 5. Reverse proxy reachability
 
@@ -164,7 +174,9 @@ docker compose exec app python -m app.cli backup /data/backup.db
 docker compose cp app:/data/backup.db ./netops-backup.db
 docker compose exec app cat /data/secrets/crypto_key    # store separately
 docker compose down -v
-# restore per docs/BACKUP_RESTORE.md, then confirm you can log in
+# restore per docs/BACKUP_RESTORE.md, then:
+docker compose exec app python -m app.cli verify-backup /data/netops.db --check-key
+# confirm you can log in and device history is intact
 ```
 
 An untested backup is a guess. See [BACKUP_RESTORE.md](BACKUP_RESTORE.md).

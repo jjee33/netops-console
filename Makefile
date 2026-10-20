@@ -100,9 +100,8 @@ fresh: clean dev ## Destroy the volume and verify a clean first-run install
 	@echo "==> fresh-volume install completed; check the admin password above"
 
 .PHONY: backup
-backup: ## Take a consistent SQLite backup of the running instance
-	$(COMPOSE) exec app python -c \
-		"import sqlite3,os; d=os.environ['NETOPS_DB_PATH']; \
-		 sqlite3.connect(d).execute(\"VACUUM INTO '/data/backup.db'\")"
+backup: ## Take a consistent SQLite backup of the running instance, then verify it
+	$(COMPOSE) exec app python -m app.cli backup /data/backup.db
+	$(COMPOSE) exec app python -m app.cli verify-backup /data/backup.db --check-key
 	@echo "==> wrote /data/backup.db inside the volume. Copy it out, and back up"
 	@echo "    /data/secrets/crypto_key to a SEPARATE location."

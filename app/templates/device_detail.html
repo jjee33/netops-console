@@ -4,7 +4,10 @@
 {% block content %}
 <div class="page-header">
   <h1>{{ device.display_name }}</h1>
-  <a href="/devices">← All devices</a>
+  <div class="header-links">
+    <a href="/devices/{{ device.id }}/history">History</a>
+    <a href="/devices">← All devices</a>
+  </div>
 </div>
 
 <section class="detail-grid">
@@ -90,8 +93,9 @@
     <span class="spinner" aria-hidden="true"></span> Running…
   </div>
 
-  {# Swap target. Replaced wholesale by each result. #}
-  <div id="diagnostic-result"></div>
+  {# Swap target, replaced wholesale by each result. The live region is the
+     wrapper, because a region that is itself swapped out is never announced. #}
+  <div aria-live="polite"><div id="diagnostic-result"></div></div>
 </section>
 
 {% if actions %}
@@ -127,7 +131,7 @@
   <div id="action-spinner" class="htmx-indicator">
     <span class="spinner" aria-hidden="true"></span> Running…
   </div>
-  <div id="action-result"></div>
+  <div aria-live="polite"><div id="action-result"></div></div>
 </section>
 {% endif %}
 
@@ -203,6 +207,12 @@
   {% else %}
   <p class="field-hint">No credentials stored yet — add one under <a href="/credentials">Credentials</a>.</p>
   {% endif %}
+</section>
+
+<section class="card" aria-labelledby="recent-activity-heading">
+  <h2 id="recent-activity-heading">Recent activity</h2>
+  {% with events = recent_events %}{% include "partials/timeline.html" %}{% endwith %}
+  <p class="field-hint"><a href="/devices/{{ device.id }}/history">Full history, including what changed between scans →</a></p>
 </section>
 
 <section class="card">

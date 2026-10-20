@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.execution import ExecutionBusy, ExecutionRejected, ExecutionStatus, get_engine
 from app.core.validation import ValidationError, validate_scan_target
-from app.models import Device, DevicePort, DiscoveryRun
+from app.models import Device, DevicePort, DiscoveryObservation, DiscoveryRun
 from app.modules.discovery.parser import ParsedHost, ParsedScan, ScanParseError, parse_scan
 
 logger = logging.getLogger("netops.discovery")
@@ -209,6 +209,7 @@ async def execute_run(
         return await _finish(session, run, "rejected", summary=str(exc))
 
     run.subnet = str(network)
+    run.scanned_ports = with_ports
 
     # Taken before the scan starts: any device in this range whose last_seen is
     # older than this did not answer, and is therefore absent.
@@ -241,7 +242,7 @@ async def execute_run(
         logger.error("discovery parse failed: %s", detail)
         return await _finish(session, run, "failed", summary=detail[:2000])
 
-    found, created = await reconcile(session, scan, network, scanned_at)
+    found, created = await reconcile(session, scan, network, scanned_at, run=run)
 
     return await _finish(
         session,
@@ -259,6 +260,8 @@ async def reconcile(
     scan: ParsedScan,
     network: ipaddress.IPv4Network | None = None,
     scanned_at: datetime | None = None,
+    *,
+    run: DiscoveryRun | None = None,
 ) -> tuple[int, int]:
     """Merge scan results into the inventory. Returns (found, newly created).
 
@@ -266,24 +269,79 @@ async def reconcile(
     :func:`mark_absent_devices_offline`. Without them this only records what
     responded, which leaves every device that has ever been seen reading as
     online forever.
+
+    Pass ``run`` to also record a per-device observation for that run — what
+    the scan saw, and which known devices it did not see. That record is what
+    device history and scan comparison are built from.
     """
     created = 0
+    observed_at = datetime.now(UTC)
     for host in scan.up_hosts:
-        _, is_new = await upsert_device(session, host)
+        device, is_new = await upsert_device(session, host)
         if is_new:
             created += 1
+        if run is not None:
+            session.add(_observation(run, device, host, observed_at))
 
     if network is not None and scanned_at is not None:
-        await mark_absent_devices_offline(session, network, scanned_at)
+        absent = await mark_absent_devices_offline(session, network, scanned_at)
+        if run is not None:
+            for device in absent:
+                session.add(
+                    DiscoveryObservation(
+                        run_id=run.id,
+                        device_id=device.id,
+                        present=False,
+                        ip_address=device.ip_address,
+                        mac_address=device.mac_address,
+                        hostname=device.hostname,
+                        vendor=device.vendor,
+                        ports=None,
+                        observed_at=observed_at,
+                    )
+                )
 
     await session.commit()
     return len(scan.up_hosts), created
 
 
+def _observation(
+    run: DiscoveryRun, device: Device, host: ParsedHost, observed_at: datetime
+) -> DiscoveryObservation:
+    """What this scan saw of one host — the scan's values, not the device's.
+
+    The device row accumulates (a hostname seen once is kept), so recording it
+    here would make every later observation look the same. Recording what this
+    scan actually returned is what lets two scans be compared honestly.
+    """
+    ports: list[dict[str, object]] | None = None
+    if run.scanned_ports:
+        ports = [
+            {"port": port.port, "protocol": port.protocol, "service": port.service}
+            for port in sorted(host.ports, key=lambda item: (item.protocol, item.port))
+            if port.state == "open"
+        ]
+
+    return DiscoveryObservation(
+        run_id=run.id,
+        device_id=device.id,
+        present=True,
+        ip_address=host.ip_address,
+        mac_address=host.mac_address,
+        hostname=host.hostname,
+        vendor=host.vendor,
+        ports=ports,
+        observed_at=observed_at,
+    )
+
+
 async def mark_absent_devices_offline(
     session: AsyncSession, network: ipaddress.IPv4Network, scanned_at: datetime
-) -> int:
+) -> list[Device]:
     """Mark devices inside a scanned range that did not answer.
+
+    Returns every device in the range that was absent from this scan, including
+    ones already offline — each is still a fact about this scan worth recording.
 
     Absence is inferred from ``last_seen`` rather than from nmap reporting a
     host as down. nmap generally omits non-responding hosts from its output
@@ -294,10 +352,9 @@ async def mark_absent_devices_offline(
     scanned this time has not been shown to be absent, and saying it is offline
     would be a guess presented as a fact.
     """
-    candidates = await session.scalars(
-        select(Device).where(Device.is_deleted.is_(False), Device.status != "offline")
-    )
+    candidates = await session.scalars(select(Device).where(Device.is_deleted.is_(False)))
 
+    absent: list[Device] = []
     changed = 0
     for device in candidates:
         try:
@@ -313,12 +370,14 @@ async def mark_absent_devices_offline(
             last_seen = last_seen.replace(tzinfo=UTC)
 
         if last_seen is None or last_seen < scanned_at:
-            device.status = "offline"
-            changed += 1
+            absent.append(device)
+            if device.status != "offline":
+                device.status = "offline"
+                changed += 1
 
     if changed:
         logger.info("marked %d device(s) offline in %s", changed, network)
-    return changed
+    return absent
 
 
 async def upsert_device(session: AsyncSession, host: ParsedHost) -> tuple[Device, bool]:

@@ -116,6 +116,7 @@ async def save(
     max_concurrent_executions: str,
     retention_days: str,
     strict_host_keys: bool,
+    commit: bool = True,
 ) -> AppSettings:
     """Validate and persist the whole settings form as one unit."""
     cidrs = parse_cidr_list(allowed_cidrs_raw)
@@ -144,6 +145,7 @@ async def save(
     await _put(session, KEY_MAX_CONCURRENT_EXECUTIONS, concurrent_executions)
     await _put(session, KEY_RETENTION_DAYS, retention)
     await _put(session, KEY_STRICT_HOST_KEYS, bool(strict_host_keys))
-    await session.commit()
+    if commit:
+        await session.commit()
 
     return await load(session)

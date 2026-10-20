@@ -20,11 +20,12 @@ All of that works today. It is still a prerelease — see the status note below 
 | **Scope control** | Private IPv4 ranges you configure. Nothing outside them can be scanned or contacted, and loopback, link-local, multicast and public space are refused outright |
 | **Discovery** | nmap host and port scanning of a chosen subnet, producing an inventory with IP, MAC, vendor, hostname and open ports. Safely re-runnable — a second scan of the same range creates no duplicates |
 | **Inventory** | Sortable, searchable device list; device detail with open ports; your own name, type and notes, which a rescan never overwrites. Removal is a soft delete, so history survives |
-| **Diagnostics** | Ping, traceroute, DNS, reverse DNS, TCP port test, service scan, ARP entry and HTTP check, from the device page. No free-form command input anywhere — the browser sends which check to run, never a command |
+| **Diagnostics** | Ping, traceroute, DNS, reverse DNS, TCP port test, service scan, ARP entry and HTTP check, from the device page. No free-form command input anywhere — the browser sends which check to run, never a command. Results carry a rule-based explanation of likely causes and the next check to run, including the cases where an exit status of 0 misleads |
+| **History** | A per-device timeline of what each scan saw, what changed between scans, every check and action, and your own edits. Compare any two scans: new, no longer answering, changed. Built only from scans you ran — nothing is sampled or inferred between them. See [docs/DEVICE_HISTORY.md](docs/DEVICE_HISTORY.md) |
 | **Actions** | Commands you define once and run against devices, locally or over SSH. Parameters are validated against a schema you set; the browser sends an action and its parameters, never a command |
 | **Credentials** | SSH keys and passwords encrypted at rest, decrypted only in memory at connection time. Never rendered back to a browser |
 | **SSH host key trust** | A credential is never offered to a device whose identity you have not verified. First contact shows a fingerprint and stops; a changed key fails rather than being silently re-trusted |
-| **Audit log** | Every diagnostic, action and discovery run, with the acting user, client IP, timing and outcome. Refusals are recorded too. History survives deleting the device or the account |
+| **Audit log** | Every diagnostic, action and discovery run, with the acting user, client IP, timing and outcome. Refusals are recorded too. Operator changes are recorded as well: device edits, host key trust and revocation, credential and action changes, settings. History survives deleting the device or the account |
 
 ## Not built yet
 
@@ -102,7 +103,8 @@ Only stable semver tags get `latest`, so during the prerelease series it does no
 | [docs/INSTALL.md](docs/INSTALL.md) | Full install, reverse proxy setup, capability verification |
 | [docs/MANUAL_VERIFICATION.md](docs/MANUAL_VERIFICATION.md) | Checks that need a real network, which CI cannot perform |
 | [docs/UPGRADING.md](docs/UPGRADING.md) | Upgrade and rollback |
-| [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) | Consistent SQLite backup, key backup, restore drill |
+| [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) | Consistent SQLite backup, `verify-backup`, key backup, restore drill |
+| [docs/DEVICE_HISTORY.md](docs/DEVICE_HISTORY.md) | What device history, scan comparison and result explanations show, and their limits |
 | [docs/ACTION_DEFINITIONS.md](docs/ACTION_DEFINITIONS.md) | Writing safe action definitions |
 | [examples/actions.json](examples/actions.json) | Eight example actions, annotated with what each one actually costs you |
 | [docs/SUDOERS_EXAMPLE.md](docs/SUDOERS_EXAMPLE.md) | Narrow sudoers and SSH `ForceCommand` hardening |

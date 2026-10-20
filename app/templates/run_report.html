@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Scan #{{ run.id }} — NetOps Console{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Scan #{{ run.id }} <span class="muted">— {{ run.subnet }}</span></h1>
+  <a href="/discovery">← Discovery</a>
+</div>
+
+<section class="card" aria-labelledby="summary-heading">
+  <h2 id="summary-heading">Summary</h2>
+  <dl class="facts">
+    <dt>Status</dt><dd><span class="badge badge-run-{{ run.status }}">{{ run.status }}</span></dd>
+    <dt>Started</dt>
+    <dd>{% if run.started_at %}<time datetime="{{ run.started_at.isoformat() }}">{{ run.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</time> UTC{% else %}—{% endif %}</dd>
+    <dt>Duration</dt><dd>{{ '%.1f s'|format(run.duration_ms / 1000) if run.duration_ms is not none else '—' }}</dd>
+    <dt>Started by</dt><dd>{{ run.username_snapshot or 'system' }}</dd>
+    <dt>Ports</dt>
+    <dd>{% if run.scanned_ports is none %}<span class="muted">not recorded (older scan)</span>{% elif run.scanned_ports %}common ports checked{% else %}host discovery only{% endif %}</dd>
+    <dt>Result</dt><dd>{{ run.output_summary or '—' }}</dd>
+  </dl>
+  {% include "partials/explanation.html" %}
+  {% if previous %}
+  <p class="field-hint">
+    <a class="primary-link" href="/discovery/compare?base={{ previous.id }}&amp;target={{ run.id }}">Compare with the previous scan of this range (#{{ previous.id }}) →</a>
+  </p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="hosts-heading">
+  <h2 id="hosts-heading">Hosts</h2>
+  {% if has_results %}
+  <div class="table-scroll">
+  <table class="data-table compact">
+    <caption class="visually-hidden">Every host this scan recorded, answering hosts first</caption>
+    <thead>
+      <tr><th scope="col">Address</th><th scope="col">Result</th><th scope="col">MAC</th>
+          <th scope="col">Hostname</th><th scope="col">Vendor</th><th scope="col">Ports</th></tr>
+    </thead>
+    <tbody>
+      {% for row in observations %}
+      <tr>
+        <td>
+          {% if row.device_id in live_devices %}<a href="/devices/{{ row.device_id }}"><code>{{ row.ip_address }}</code></a>
+          {% else %}<code>{{ row.ip_address }}</code>{% endif %}
+        </td>
+        <td>
+          {% if row.present %}<span class="badge badge-online">answered</span>
+          {% else %}<span class="badge badge-offline">no answer</span>{% endif %}
+        </td>
+        {# Every value below came from the network. Escaped, never |safe. #}
+        <td>{% if row.present %}{{ row.mac_address or '—' }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if row.present %}{{ row.hostname or '—' }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{% if row.present %}{{ row.vendor or '—' }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted ports-cell">{{ describe_ports(row.ports) if row.present else "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="field-hint">
+    “No answer” rows are devices already in your inventory, inside this range,
+    that did not respond to this scan.
+  </p>
+  {% else %}
+  <p class="muted">{{ no_results_reason }}</p>
+  {% endif %}
+</section>
+{% endblock %}

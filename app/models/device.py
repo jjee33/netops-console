@@ -85,8 +85,17 @@ class Device(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
+    # Never loaded implicitly. This was "selectin", which quietly fetched every
+    # port of every device on each device query — the inventory list, the
+    # dashboard, and the absence sweep after every scan — when the only
+    # consumer wanted a count. "raise" makes any new implicit load fail loudly
+    # in tests instead of becoming a slow page. Deletes are left to the
+    # database's ON DELETE CASCADE, so removing a device never loads them.
     ports: Mapped[list[DevicePort]] = relationship(
-        back_populates="device", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="device",
+        cascade="all, delete-orphan",
+        lazy="raise",
+        passive_deletes=True,
     )
 
     @property

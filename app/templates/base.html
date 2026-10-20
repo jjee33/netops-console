@@ -6,6 +6,10 @@
   <title>{% block title %}NetOps Console{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/app.css">
   <link rel="icon" href="data:,">
+  {# HTMX injects an inline <style> for its loading indicator by default, which
+     the CSP (style-src 'self') blocks and logs as an error on every page. The
+     same rules live in app.css, so the injection is switched off. #}
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   {# CSP forbids inline script, so HTMX is vendored rather than loaded from a CDN. #}
   <script src="/static/js/htmx.min.js" defer></script>
   <script src="/static/js/app.js" defer></script>
@@ -13,18 +17,24 @@
 {# hx-headers puts the CSRF token on every HTMX request. Forms carry it as a
    hidden field instead; both paths are checked by the same middleware. #}
 <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+<a class="skip-link" href="#main">Skip to content</a>
 
 {% if current_user %}
 <header class="topbar">
   <a class="brand" href="/">NetOps&nbsp;Console</a>
-  <nav>
-    <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>Dashboard</a>
-    <a href="/devices" {% if request.url.path.startswith('/devices') %}class="active"{% endif %}>Devices</a>
-    <a href="/discovery" {% if request.url.path.startswith('/discovery') %}class="active"{% endif %}>Discovery</a>
-    <a href="/actions" {% if request.url.path.startswith('/actions') %}class="active"{% endif %}>Actions</a>
-    <a href="/credentials" {% if request.url.path.startswith('/credentials') %}class="active"{% endif %}>Credentials</a>
-    <a href="/audit" {% if request.url.path.startswith('/audit') %}class="active"{% endif %}>Audit</a>
-    <a href="/settings" {% if request.url.path == '/settings' %}class="active"{% endif %}>Settings</a>
+  <nav aria-label="Main">
+    {% set path = request.url.path %}
+    {% for href, label, active in [
+         ('/', 'Dashboard', path == '/'),
+         ('/devices', 'Devices', path.startswith('/devices')),
+         ('/discovery', 'Discovery', path.startswith('/discovery')),
+         ('/actions', 'Actions', path.startswith('/actions')),
+         ('/credentials', 'Credentials', path.startswith('/credentials')),
+         ('/audit', 'Audit', path.startswith('/audit')),
+         ('/settings', 'Settings', path == '/settings')] %}
+    {# aria-current, not only a class, so screen readers announce the section. #}
+    <a href="{{ href }}" {% if active %}class="active" aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
   </nav>
   <div class="topbar-right">
     <span class="user">{{ current_user.username }}</span>
@@ -37,7 +47,7 @@
 </header>
 {% endif %}
 
-<main class="container">
+<main class="container" id="main" tabindex="-1">
   {% block content %}{% endblock %}
 </main>
 

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Compare scans — NetOps Console{% endblock %}
+
+{% macro host_list(items, empty) %}
+  {% if items %}
+  <ul class="delta-list">
+    {% for item in items %}
+    <li>
+      {% if item.device_id %}<a href="/devices/{{ item.device_id }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}
+      {% if item.label != item.ip_address %}<code>{{ item.ip_address }}</code>{% endif %}
+      {% if item.lines %}
+      <ul class="timeline-details">{% for line in item.lines %}<li>{{ line }}</li>{% endfor %}</ul>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">{{ empty }}</p>
+  {% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Compare scans</h1>
+  <a href="/discovery">← Discovery</a>
+</div>
+
+{% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
+
+<section class="card">
+  {% if candidates|length >= 2 %}
+  {# GET, read-only: choosing runs changes nothing, so there is no token to send. #}
+  <form method="get" action="/discovery/compare" class="compare-form">
+    <div>
+      <label for="base">Earlier scan</label>
+      <select id="base" name="base">
+        {% for run in candidates %}
+        <option value="{{ run.id }}" {% if run.id == base %}selected{% endif %}>#{{ run.id }} · {{ run.subnet }} · {{ run.started_at.strftime('%Y-%m-%d %H:%M') if run.started_at else '' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="target">Later scan</label>
+      <select id="target" name="target">
+        {% for run in candidates %}
+        <option value="{{ run.id }}" {% if run.id == target %}selected{% endif %}>#{{ run.id }} · {{ run.subnet }} · {{ run.started_at.strftime('%Y-%m-%d %H:%M') if run.started_at else '' }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="diag-button">Compare</button>
+  </form>
+  <p class="field-hint">
+    Hosts are matched by the identity resolved at scan time — MAC first, then
+    address — so a device that moved address shows as changed, not as one host
+    gone and another new.
+  </p>
+  {% else %}
+  <p class="muted">
+    Comparison needs two completed scans with per-host results. Scans run on
+    this version or later record them; run another scan to compare against.
+  </p>
+  {% endif %}
+</section>
+
+{% if comparison %}
+<section class="card" aria-labelledby="result-heading" aria-live="polite">
+  <h2 id="result-heading">
+    <a href="/discovery/runs/{{ comparison.base.id }}/report">#{{ comparison.base.id }}</a>
+    → <a href="/discovery/runs/{{ comparison.target.id }}/report">#{{ comparison.target.id }}</a>
+  </h2>
+  {% for note in comparison.notes %}<p class="alert alert-warning">{{ note }}</p>{% endfor %}
+
+  {% if comparison.comparable %}
+  <ul class="tiles compare-tiles" aria-label="Summary">
+    <li class="tile"><span class="tile-value">{{ comparison.added|length }}</span><span class="tile-label">New</span></li>
+    <li class="tile"><span class="tile-value">{{ comparison.missing|length }}</span><span class="tile-label">No longer answering</span></li>
+    <li class="tile"><span class="tile-value">{{ comparison.changed|length }}</span><span class="tile-label">Changed</span></li>
+    <li class="tile"><span class="tile-value">{{ comparison.unchanged }}</span><span class="tile-label">Unchanged</span></li>
+  </ul>
+
+  <h3>New in the later scan</h3>
+  {{ host_list(comparison.added, 'None.') }}
+  <h3>Answered before, not in the later scan</h3>
+  {{ host_list(comparison.missing, 'None.') }}
+  {% if comparison.outside %}
+  <h3>Outside the later scan's range</h3>
+  {{ host_list(comparison.outside, '') }}
+  {% endif %}
+  <h3>Changed</h3>
+  {{ host_list(comparison.changed, 'None.') }}
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

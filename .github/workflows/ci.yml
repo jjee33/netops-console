@@ -22,6 +22,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          # gitleaks scans the PR commit range, including its first parent.
+          # Shallow checkout omits that parent and falsely fails the scan.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v6
         with:

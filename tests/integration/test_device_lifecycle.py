@@ -125,10 +125,10 @@ class TestOfflineDetection:
             await session.commit()
 
         async with get_session_factory()() as session:
-            changed = await mark_absent_devices_offline(session, NETWORK, datetime.now(UTC))
+            absent = await mark_absent_devices_offline(session, NETWORK, datetime.now(UTC))
             await session.commit()
 
-        assert changed == 0
+        assert absent == []
 
     async def test_reconcile_without_a_network_marks_nothing(self, migrated: Path) -> None:
         """The two-argument form is used where absence cannot be inferred."""

@@ -17,6 +17,8 @@ from app.modules.actions import service as actions_service
 from app.modules.auth.dependencies import ActiveUser, SessionDep
 from app.modules.credentials import service as credentials_service
 from app.modules.diagnostics import service as diagnostics_service
+from app.modules.history import service as history_service
+from app.modules.history.changes import describe_changes, record_change
 from app.modules.settings import service as settings_service
 
 logger = logging.getLogger("netops.devices")
@@ -141,8 +143,19 @@ async def device_list(
 
     devices = list(await session.scalars(statement.order_by(ordering).limit(500)))
 
+    # One grouped count instead of loading every port row for every device.
+    port_counts: dict[int, int] = {}
+    if devices:
+        rows = await session.execute(
+            select(DevicePort.device_id, func.count())
+            .where(DevicePort.device_id.in_([device.id for device in devices]))
+            .group_by(DevicePort.device_id)
+        )
+        port_counts = {device_id: count for device_id, count in rows.all()}
+
     context = {
         "devices": devices,
+        "port_counts": port_counts,
         "q": q,
         "sort": sort,
         "direction": direction,
@@ -182,6 +195,9 @@ async def device_detail(
             "assigned_credentials": await credentials_service.for_device(session, device.id),
             "all_credentials": await credentials_service.list_all(session),
             "host_keys": await credentials_service.host_keys_for(session, device.id),
+            "recent_events": (
+                await history_service.device_timeline(session, device, limit=5)
+            ).events,
         },
     )
 
@@ -200,9 +216,17 @@ async def update_device(
     if device is None or device.is_deleted:
         return render(request, "not_found.html", {}, status_code=status.HTTP_404_NOT_FOUND)
 
+    before = {"name": device.name, "type": device.device_type, "notes": device.notes}
     device.name = name.strip() or None
     device.device_type = device_type.strip() or None
     device.notes = notes.strip() or None
+    after = {"name": device.name, "type": device.device_type, "notes": device.notes}
+
+    # Saving an unchanged form is not a change, and recording it would bury
+    # the edits that matter.
+    detail = describe_changes(before, after, summarise=("notes",))
+    if detail:
+        record_change(session, request, user, "device_edited", device=device, detail=detail)
     await session.commit()
 
     logger.info("device %s updated by %r", device_id, user.username)
@@ -226,6 +250,14 @@ async def delete_device(
 
     device.is_deleted = True
     device.deleted_at = datetime.now(UTC)
+    record_change(
+        session,
+        request,
+        user,
+        "device_removed",
+        device=device,
+        detail=f"Removed from the inventory at {device.ip_address}. History is kept.",
+    )
     await session.commit()
 
     logger.info("device %s soft-deleted by %r", device_id, user.username)

@@ -22,6 +22,7 @@ from sqlalchemy import select
 
 from app.core.db import get_session_factory
 from app.core.requests import client_ip, wants_partial
+from app.core.retention import prune
 from app.core.templating import render
 from app.core.validation import ValidationError, validate_scan_target
 from app.models import DiscoveryRun
@@ -65,6 +66,10 @@ async def _scan(
             await service.execute_run(
                 session, run, subnet, allowed, max_hosts, with_ports=with_ports
             )
+            # A scan writes one observation per device in range, so it pays for
+            # pruning them, as diagnostics do for their own output.
+            settings = await settings_service.load(session)
+            await prune(session, settings.retention_days)
         except Exception:
             # A background task that dies quietly leaves a run stuck on
             # "running" forever, which reads as a hung application.

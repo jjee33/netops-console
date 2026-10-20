@@ -39,7 +39,8 @@ Understanding this is a prerequisite for deploying the application safely. Sever
 | CSRF | Synchronizer token required on every state-changing request. |
 | Credential brute force | Per-account lockout with backoff plus a per-IP rate limit. Failure messages never reveal whether a username exists. |
 | Privilege escalation on the host | The container runs non-root with all capabilities dropped except `CAP_NET_RAW`. Local actions needing root require an operator-installed sudoers entry for one exact absolute-path command — never a wildcard, never a shell. |
-| Audit tampering by deletion | Devices are soft-deleted. Audit rows survive with denormalized label snapshots. |
+| Audit tampering by deletion | Devices are soft-deleted. Audit rows survive with denormalized label snapshots. Operator changes — including forgetting a host key, which deletes the trust record — write a separate change-log row that records who trusted the key and who revoked it. |
+| Secrets in history | The change log records credentials by name and username only. Action commands are recorded after secret parameters are masked. Scan observations hold only what nmap returned. |
 
 ### Out of scope
 

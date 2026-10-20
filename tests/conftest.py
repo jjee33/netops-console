@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import os
+import shutil
 import subprocess
 import sys
 from collections.abc import AsyncIterator, Iterator
@@ -48,23 +49,44 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     get_settings.cache_clear()
 
 
-@pytest_asyncio.fixture
-async def migrated(env: Path) -> AsyncIterator[Path]:
-    """An isolated database with the schema applied by Alembic.
+def run_alembic(*arguments: str, db_path: Path) -> subprocess.CompletedProcess[str]:
+    """Run Alembic against ``db_path`` in a subprocess.
 
-    Alembic runs in a subprocess rather than in-process: it drives its own event
-    loop, and nesting that inside pytest-asyncio's loop deadlocks.
+    A subprocess rather than in-process: Alembic drives its own event loop, and
+    nesting that inside pytest-asyncio's loop deadlocks.
     """
-    result = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
+    return subprocess.run(
+        [sys.executable, "-m", "alembic", *arguments],
         cwd=REPO_ROOT,
-        env={**os.environ},
+        env={**os.environ, "NETOPS_DB_PATH": str(db_path)},
         capture_output=True,
         text=True,
         check=False,
     )
+
+
+@pytest.fixture(scope="session")
+def migrated_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A database migrated to head once per test session.
+
+    Spawning Alembic for every test cost roughly 0.4 s each and dominated the
+    suite's runtime. Each test still gets its own private copy of this file, so
+    isolation is unchanged; only the repeated subprocess is gone. Built fresh on
+    every run, so a new migration is always picked up.
+    """
+    template = tmp_path_factory.mktemp("template") / "netops.db"
+    result = run_alembic("upgrade", "head", db_path=template)
     if result.returncode != 0:
         pytest.fail(f"alembic upgrade failed:\n{result.stdout}\n{result.stderr}")
+    return template
+
+
+@pytest_asyncio.fixture
+async def migrated(env: Path, migrated_template: Path) -> AsyncIterator[Path]:
+    """An isolated database with the schema applied by Alembic."""
+    # Migrations run without WAL (see migrations/env.py), so the template is a
+    # single self-contained file once Alembic has exited.
+    shutil.copyfile(migrated_template, os.environ["NETOPS_DB_PATH"])
 
     from app.core.db import dispose_engine
 

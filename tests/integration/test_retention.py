@@ -114,3 +114,36 @@ class TestPruning:
     async def test_an_empty_database_is_fine(self, migrated) -> None:
         async with get_session_factory()() as session:
             assert (await prune(session, retention_days=90)).total == 0
+
+
+class TestObservationPruning:
+    async def test_old_observations_go_and_their_runs_stay(self, migrated) -> None:
+        """Observations follow the window; the run row that summarises the
+        scan is kept, as runs always have been."""
+        from app.models import DiscoveryObservation
+
+        now = datetime.now(UTC)
+        async with get_session_factory()() as session:
+            for age in (1, 400):
+                run = DiscoveryRun(
+                    subnet="10.0.30.0/24", status="success", started_at=now - timedelta(days=age)
+                )
+                session.add(run)
+                await session.flush()
+                session.add(
+                    DiscoveryObservation(
+                        run_id=run.id,
+                        present=True,
+                        ip_address="10.0.30.5",
+                        observed_at=now - timedelta(days=age),
+                    )
+                )
+            await session.commit()
+
+        async with get_session_factory()() as session:
+            result = await prune(session, retention_days=90)
+            remaining = await session.scalar(select(func.count()).select_from(DiscoveryObservation))
+
+        assert result.observations == 1
+        assert remaining == 1
+        assert (await _counts())[2] == 2

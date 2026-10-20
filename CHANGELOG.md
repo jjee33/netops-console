@@ -10,6 +10,85 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+Inventory and diagnostics you can reason about after the fact: what changed,
+when, and what a failed check most likely means. No new execution surface, and
+nothing runs on its own.
+
+### Added
+- **Device history.** A per-device timeline of first sighting, changes between
+  scans (address, MAC, hostname, vendor, open ports), going quiet and answering
+  again, alongside every check, action and operator edit. Built only from scans
+  you ran. Between scans nothing is known, so nothing is shown. See
+  [docs/DEVICE_HISTORY.md](docs/DEVICE_HISTORY.md).
+- **Scan reports and comparison.** Each run has a report listing every host it
+  recorded and every known device in range that did not answer. Any two runs
+  can be compared: new, no longer answering, outside range, changed. Matching
+  uses the scan-time identity, so a device that moved address shows as changed.
+- **Explanations for check and scan results**, naming their evidence, likely
+  causes and the next check to run. Several cover runs whose exit status of 0
+  misleads: an empty DNS answer, a closed or filtered port, an empty ARP cache,
+  and a scan that found hosts but no MAC addresses, which is the silent symptom
+  of running without host networking.
+- **Change log.** Device edits and removal, host key trust and revocation,
+  credential and action changes, and settings changes are recorded with user,
+  time and client address. They appear under **Audit → Changes** and on device
+  timelines.
+- **`python -m app.cli verify-backup [--check-key]`** checks a backup read-only:
+  integrity, foreign keys, schema revision against the running code, row
+  counts, and optionally that every credential decrypts with the configured
+  key. It needs no `sqlite3` on the host and exits non-zero on failure.
+  `make backup` now runs it.
+
+### Security
+- Host-key probe and trust now revalidate stored device addresses against the
+  current allowlist and reserved ranges before opening a network connection.
+- Action definition/deletion events no longer copy arbitrary command-template
+  literals to the audit log, where hardcoded secrets could otherwise leak.
+- Credential, host-key and settings changes now commit atomically with their
+  change events, rather than leaving unaudited changes if recording fails.
+  Deleting a credential also records the lost assignment in each affected
+  device's history before the association rows cascade away.
+- Updated minimum cryptography, asyncssh, pytest and pytest-asyncio versions
+  to address known dependency advisories.
+- **Forgetting a host key erased the record of who had trusted it.** Revocation
+  deleted the trust row, so the only evidence was the process log. The change
+  log now keeps who trusted which fingerprint and who revoked it.
+- Credential events record the name and username only; a test asserts the
+  secret appears in neither the change log nor the audit page.
+
+### Fixed
+- **Every page logged a Content-Security-Policy violation.** HTMX injected an
+  inline `<style>` for its loading indicator, which `style-src 'self'` blocks.
+  The same rules already lived in `app.css`, so the injection is now disabled.
+- **The audit log linked to a bare fragment.** `/diagnostics/{id}` returned the
+  HTMX partial to a plain navigation, with no layout or viewport. It now
+  returns a full page.
+- Device-list sort links did not URL-encode the search term, so an `&` ended
+  the query early. Sorting also dropped the new-devices filter.
+- Light-theme status colours measured 2.3–3.4:1 contrast and the dark-theme
+  primary button 3.0:1, all below WCAG AA. All are now 5.2:1 or better.
+- `app.cli backup` leaked its SQLite connection. A `sqlite3` connection's
+  context manager commits but does not close.
+
+### Changed
+- **Accessibility:** skip link, `aria-current` on the active section, visible
+  keyboard focus everywhere, live regions that survive HTMX swaps, `aria-sort`
+  and column scopes on the device table, and layouts that work at 375 px.
+- **Performance:** devices no longer load every port row on each query. On a
+  synthetic 500-device inventory with 15 ports each, the device list dropped
+  from 78 ms to 21 ms (median), and reconciling a 250-host scan from 1.2 s to
+  0.8 s.
+- Scan observations follow the existing retention window and are pruned after
+  each scan.
+- The test suite migrates one template database per session instead of
+  running Alembic for every test: 287 s down to 66 s.
+
+### Upgrade notes
+- One additive migration (`4cdd051ae46a`): two new tables and one nullable
+  column. Existing rows are not rewritten. Runs from earlier versions have no
+  per-host data, and the UI says so. Downgrading drops only the new history; see
+  [docs/UPGRADING.md](docs/UPGRADING.md#rolling-back-one-migration-without-a-restore).
+
 ## [0.1.0-alpha.5] — 2026-07-28
 
 Hardening pass. One real security fix, two correctness gaps, and the example

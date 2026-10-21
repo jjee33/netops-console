@@ -91,6 +91,21 @@ class TestArgvConstruction:
 
 
 class TestExecution:
+    async def test_untrusted_arguments_are_never_logged(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        async def refuse_spawn(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("spawn intercepted before any device action")
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", refuse_spawn)
+        caplog.set_level("INFO", logger="netops.execution")
+        with pytest.raises(RuntimeError, match="spawn intercepted"):
+            await ExecutionEngine()._spawn(
+                ["/usr/bin/ping", "secret-token\nforged log entry"], 1, None
+            )
+        assert "secret-token" not in caplog.text
+        assert "forged log entry" not in caplog.text
+
     async def test_successful_run_captures_output(self) -> None:
         engine = ExecutionEngine()
         result = await engine.run("ping", ["-c", "1", "-W", "2", "127.0.0.1"], timeout=10)

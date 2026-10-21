@@ -204,7 +204,10 @@ class ExecutionEngine:
         secret_values: list[str] | None,
     ) -> ExecutionResult:
         started = time.monotonic()
-        logger.info("exec: %s", " ".join(argv))
+        # Arguments can include user-supplied action parameters (including values
+        # flagged secret). Never put argv in the container log; the action audit
+        # stores a separately redacted command preview.
+        logger.info("exec: %s", argv[0])
 
         process = await asyncio.create_subprocess_exec(
             # Not a shell, and argv[0] is an allowlisted absolute path resolved

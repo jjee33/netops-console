@@ -10,6 +10,16 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.9] — 2026-10-21
+
+### Security
+- Reject malformed forwarded client addresses before using them as login
+  throttle keys or recording them in audit and application logs.
+- Escape an untrusted submitted host-key fingerprint in mismatch warnings so
+  a line break cannot forge another log event.
+- Re-enable the inactive weekly/on-demand security workflow and make its
+  dependency audit skip only the unpublished editable first-party package.
+
 ## [0.1.0-alpha.8] — 2026-10-21
 
 ### Security

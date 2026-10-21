@@ -30,7 +30,10 @@ jobs:
       - run: pip install -e '.[dev]'
 
       - name: pip-audit
-        run: pip-audit --strict --desc
+        # The editable first-party package is not published to PyPI. pip-audit
+        # reports it as a skip even with --skip-editable, and --strict treats
+        # that intentional skip as fatal. Vulnerabilities still fail the job.
+        run: pip-audit --desc --skip-editable
 
   image:
     name: Published image

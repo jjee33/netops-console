@@ -10,6 +10,16 @@ flagged **BREAKING** here with the migration or reinstall steps required.
 
 ## [Unreleased]
 
+## [0.1.0-alpha.7] — 2026-10-21
+
+### Security
+- Stop logging command arguments: action parameters could include secrets and
+  line breaks, exposing values in container logs despite a redacted audit preview.
+- Reject backslashes and control characters in login return paths before they
+  can be interpreted differently by URL parsers.
+- Fail the release image scan on fixable high/critical findings, retaining its
+  SARIF report even on failure.
+
 ## [0.1.0-alpha.6] — 2026-10-20
 
 Inventory and diagnostics you can reason about after the fact: what changed,
@@ -310,7 +320,8 @@ Delivery pipeline and container foundation. No usable application.
   asserts capabilities, the non-root UID, loopback-only binding, and SQLite pragmas.
 - Release pipeline publishing signed multi-arch images with SBOM and provenance.
 
-[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.6...HEAD
+[Unreleased]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.7...HEAD
+[0.1.0-alpha.7]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
 [0.1.0-alpha.6]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.5...v0.1.0-alpha.6
 [0.1.0-alpha.5]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.4...v0.1.0-alpha.5
 [0.1.0-alpha.4]: https://github.com/jjee33/netops-console/compare/v0.1.0-alpha.3...v0.1.0-alpha.4

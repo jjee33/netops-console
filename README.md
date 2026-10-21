@@ -8,7 +8,7 @@ All of that works today. It is still a prerelease — see the status note below 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Image](https://img.shields.io/badge/ghcr.io-netops--console-blue?logo=docker)](https://github.com/jjee33/netops-console/pkgs/container/netops-console)
 
-> **Status: pre-release (`v0.1.0-alpha.6`).** Usable but incomplete — see the table below for what actually works today. Back up the database and encryption key before upgrading; alpha schema changes are covered by migrations and release notes. Watch the repo for the v0.1.0 release.
+> **Status: pre-release (`v0.1.0-alpha.7`).** Usable but incomplete — see the table below for what actually works today. Back up the database and encryption key before upgrading; alpha schema changes are covered by migrations and release notes. Watch the repo for the v0.1.0 release.
 
 ---
 

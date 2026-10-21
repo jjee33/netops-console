@@ -60,6 +60,7 @@ still the simplest rollback and the one to prefer.
 |---|---|---|
 | `0.1.0-alpha.5` | `36c5a90d852f` | — |
 | `0.1.0-alpha.6` | `4cdd051ae46a` | `discovery_observation`, `change_event`, `discovery_run.scanned_ports`. Additive; downgrading to `36c5a90d852f` drops per-host scan history and the change log and touches nothing else |
+| `0.1.0-alpha.7` | `4cdd051ae46a` | No schema changes from alpha.6 |
 
 `verify-backup` reports the revision a backup is at, and whether this version
 can run it.

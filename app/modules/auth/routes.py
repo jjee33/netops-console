@@ -31,7 +31,13 @@ def _safe_next(value: str | None) -> str:
     ``//evil.example`` is a protocol-relative URL that browsers treat as
     absolute, so checking for a leading slash alone is not enough.
     """
-    if not value or not value.startswith("/") or value.startswith("//"):
+    if (
+        not value
+        or not value.startswith("/")
+        or value.startswith("//")
+        or "\\" in value
+        or any(ord(character) < 32 or ord(character) == 127 for character in value)
+    ):
         return "/"
     return value
 

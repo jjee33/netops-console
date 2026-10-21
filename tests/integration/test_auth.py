@@ -265,7 +265,12 @@ class TestPasswordChangeValidation:
 class TestOpenRedirect:
     @pytest.mark.parametrize(
         "target",
-        ["//evil.example.com", "https://evil.example.com", "http://evil.example.com/x"],
+        [
+            "//evil.example.com",
+            "/\\evil.example.com",  # WHATWG URLs treat backslashes as separators.
+            "https://evil.example.com",
+            "http://evil.example.com/x",
+        ],
     )
     async def test_next_parameter_cannot_leave_the_origin(
         self, client: httpx.AsyncClient, target: str

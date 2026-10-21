@@ -138,6 +138,11 @@ markers = [
 source = ["app"]
 branch = true
 omit = ["app/main.py", "migrations/*"]
+# SQLAlchemy's async layer runs database work inside greenlets, which coverage
+# does not trace by default. Without this, every route body after its first
+# database await was reported as unexecuted: history routes measured 46% with
+# tests covering 97% of them.
+concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

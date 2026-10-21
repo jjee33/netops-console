@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -194,7 +194,11 @@ _STATUS_TONE: dict[str, Tone] = {
 
 
 def scan_events(
-    observations: Sequence[DiscoveryObservation], runs: dict[int, DiscoveryRun]
+    observations: Sequence[DiscoveryObservation],
+    runs: dict[int, DiscoveryRun],
+    *,
+    previous: DiscoveryObservation | None = None,
+    last_present: DiscoveryObservation | None = None,
 ) -> tuple[list[TimelineEvent], ScanCoverage]:
     """Turn a device's observations, oldest first, into the events worth reading.
 
@@ -203,10 +207,16 @@ def scan_events(
     the previous one saw is counted in the coverage figures but adds no row —
     otherwise a device scanned daily would bury its one real change under a
     year of "no change".
+
+    When ``observations`` is a window onto a longer history, pass the record
+    immediately before it as ``previous`` and the last present one before it as
+    ``last_present``. Without them the oldest row in the window would be
+    reported as the device's first sighting, which it is not.
+
+    The returned coverage describes the window only; :func:`device_timeline`
+    counts the full history separately.
     """
     events: list[TimelineEvent] = []
-    last_present: DiscoveryObservation | None = None
-    previous: DiscoveryObservation | None = None
     answered = 0
 
     for observation in observations:
@@ -327,20 +337,74 @@ def _change_event(event: ChangeEvent) -> TimelineEvent:
     )
 
 
+def _capped(rows: list[Any], when: str) -> tuple[list[Any], datetime | None]:
+    """Split a newest-first fetch of ``SOURCE_LIMIT + 1`` rows.
+
+    Returns the rows to show and, when the source had more than fit, the
+    timestamp of the oldest row shown: nothing older than that can be shown
+    from *any* source without implying a completeness that is not there.
+    """
+    if len(rows) <= SOURCE_LIMIT:
+        return rows, None
+    kept = rows[:SOURCE_LIMIT]
+    return kept, as_utc(getattr(kept[-1], when))
+
+
 async def device_timeline(
     session: AsyncSession, device: Device, *, limit: int = 200
 ) -> DeviceTimeline:
-    observations = list(
+    """Merge every history source for a device, newest first.
+
+    Each source is read newest-first and capped. Capping sources independently
+    and then merging would leave silent gaps: a device with many checks would
+    show its latest checks next to scan events from long before the oldest of
+    them, with the checks in between missing. So when any source is capped, the
+    whole timeline is cut at that source's oldest shown row, and marked
+    truncated.
+    """
+    cutoffs: list[datetime] = []
+
+    fetched = list(
         await session.scalars(
             select(DiscoveryObservation)
             .where(DiscoveryObservation.device_id == device.id)
             .order_by(DiscoveryObservation.observed_at.desc(), DiscoveryObservation.id.desc())
-            .limit(SOURCE_LIMIT)
+            .limit(SOURCE_LIMIT + 1)
         )
     )
-    observations.reverse()
+    window, cutoff = _capped(fetched, "observed_at")
+    previous: DiscoveryObservation | None = None
+    last_present: DiscoveryObservation | None = None
+    if cutoff is not None:
+        cutoffs.append(cutoff)
+        # The record just before the window seeds the comparison, so the oldest
+        # row shown is diffed against its real predecessor instead of being
+        # presented as the first sighting.
+        previous = fetched[SOURCE_LIMIT]
+        oldest = window[-1]
+        last_present = (
+            previous
+            if previous.present
+            else await session.scalar(
+                select(DiscoveryObservation)
+                .where(
+                    DiscoveryObservation.device_id == device.id,
+                    DiscoveryObservation.present.is_(True),
+                    or_(
+                        DiscoveryObservation.observed_at < oldest.observed_at,
+                        and_(
+                            DiscoveryObservation.observed_at == oldest.observed_at,
+                            DiscoveryObservation.id < oldest.id,
+                        ),
+                    ),
+                )
+                .order_by(DiscoveryObservation.observed_at.desc(), DiscoveryObservation.id.desc())
+                .limit(1)
+            )
+        )
+    window.reverse()
 
-    run_ids = {observation.run_id for observation in observations}
+    run_ids = {observation.run_id for observation in window}
     runs = (
         {
             run.id: run
@@ -352,7 +416,24 @@ async def device_timeline(
         else {}
     )
 
-    events, coverage = scan_events(observations, runs)
+    events, _ = scan_events(window, runs, previous=previous, last_present=last_present)
+
+    # Coverage is counted over the full history, not the window shown.
+    in_history = DiscoveryObservation.device_id == device.id
+    scans = await session.scalar(select(func.count()).where(in_history)) or 0
+    answered = (
+        await session.scalar(
+            select(func.count()).where(in_history, DiscoveryObservation.present.is_(True))
+        )
+        or 0
+    )
+    newest = fetched[0] if fetched else None
+    coverage = ScanCoverage(
+        scans=scans,
+        answered=answered,
+        last_run_id=newest.run_id if newest else None,
+        last_present=newest.present if newest else None,
+    )
 
     events.append(
         TimelineEvent(
@@ -363,32 +444,57 @@ async def device_timeline(
         )
     )
 
-    diagnostics = await session.scalars(
-        select(DiagnosticResult)
-        .where(DiagnosticResult.device_id == device.id)
-        .order_by(DiagnosticResult.started_at.desc())
-        .limit(SOURCE_LIMIT)
+    diagnostics, cutoff = _capped(
+        list(
+            await session.scalars(
+                select(DiagnosticResult)
+                .where(DiagnosticResult.device_id == device.id)
+                .order_by(DiagnosticResult.started_at.desc())
+                .limit(SOURCE_LIMIT + 1)
+            )
+        ),
+        "started_at",
     )
+    cutoffs += [cutoff] if cutoff else []
     events += [_diagnostic_event(result) for result in diagnostics]
 
-    executions = await session.scalars(
-        select(ActionExecution)
-        .where(ActionExecution.device_id == device.id)
-        .order_by(ActionExecution.started_at.desc())
-        .limit(SOURCE_LIMIT)
+    executions, cutoff = _capped(
+        list(
+            await session.scalars(
+                select(ActionExecution)
+                .where(ActionExecution.device_id == device.id)
+                .order_by(ActionExecution.started_at.desc())
+                .limit(SOURCE_LIMIT + 1)
+            )
+        ),
+        "started_at",
     )
+    cutoffs += [cutoff] if cutoff else []
     events += [_action_event(execution) for execution in executions]
 
-    changes = await session.scalars(
-        select(ChangeEvent)
-        .where(ChangeEvent.device_id == device.id)
-        .order_by(ChangeEvent.created_at.desc())
-        .limit(SOURCE_LIMIT)
+    changes, cutoff = _capped(
+        list(
+            await session.scalars(
+                select(ChangeEvent)
+                .where(ChangeEvent.device_id == device.id)
+                .order_by(ChangeEvent.created_at.desc())
+                .limit(SOURCE_LIMIT + 1)
+            )
+        ),
+        "created_at",
     )
+    cutoffs += [cutoff] if cutoff else []
     events += [_change_event(event) for event in changes]
 
+    truncated = bool(cutoffs)
+    if cutoffs:
+        horizon = max(cutoffs)
+        events = [event for event in events if event.when >= horizon]
+
     events.sort(key=lambda event: event.when, reverse=True)
-    return DeviceTimeline(events=events[:limit], coverage=coverage, truncated=len(events) > limit)
+    if len(events) > limit:
+        truncated = True
+    return DeviceTimeline(events=events[:limit], coverage=coverage, truncated=truncated)
 
 
 # ---------------------------------------------------------------------------

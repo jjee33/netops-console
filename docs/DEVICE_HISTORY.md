@@ -35,6 +35,13 @@ A scan that saw exactly what the previous one saw adds no row; it shows up in
 the coverage counts instead. Diagnostics, actions and your own edits appear in
 the same timeline.
 
+For a long-lived device, the page reads the most recent 100 records of each
+kind. If any kind has more, the whole timeline stops at the oldest record shown
+for that kind, so it never shows a gap where checks or scans are missing. The
+page says when this happens. The coverage counts always cover the full
+history, and the oldest scan shown is compared with the scan before it, so it
+is never reported as a first sighting.
+
 ### Reading it correctly
 
 - **"Ports not compared"** means one of the two scans ran without port

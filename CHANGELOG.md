@@ -72,6 +72,10 @@ nothing runs on its own.
   each scan.
 - The test suite migrates one template database per session instead of
   running Alembic for every test: 287 s down to 66 s.
+- Coverage now traces greenlets. SQLAlchemy's async layer runs database work
+  inside them, so every route body after its first database call was reported
+  as unexecuted. Measured total coverage rises from 79% to 87% with no test
+  changes; route modules had read 39–69%.
 
 ### Upgrade notes
 - One additive migration (`4cdd051ae46a`): two new tables and one nullable

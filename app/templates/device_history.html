@@ -37,8 +37,10 @@
   {% with events = timeline.events %}{% include "partials/timeline.html" %}{% endwith %}
   {% if timeline.truncated %}
   <p class="field-hint">
-    Showing the most recent {{ timeline.events | length }} events. The
-    <a href="/audit">audit log</a> holds everything within the retention window.
+    Showing the most recent {{ timeline.events | length }} events. Older history
+    is cut off at one point for every source, so nothing shown here has gaps.
+    The <a href="/audit">audit log</a> holds everything within the retention
+    window.
   </p>
   {% endif %}
 </section>

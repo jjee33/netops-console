@@ -9,6 +9,7 @@ tests put representative rows in first.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -29,7 +30,7 @@ def _tables(conn: sqlite3.Connection) -> set[str]:
 
 
 def _seed_previous_schema(db: Path) -> None:
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         conn.execute(
             "INSERT INTO user (id, username, password_hash, is_active, must_change_password,"
             " failed_login_count) VALUES (1, 'admin', 'x', 1, 0, 0)"
@@ -52,7 +53,7 @@ class TestHistoryMigration:
 
         _alembic(db, "upgrade", "head")
 
-        with sqlite3.connect(db) as conn:
+        with closing(sqlite3.connect(db)) as conn, conn:
             assert {"discovery_observation", "change_event"} <= _tables(conn)
             run = conn.execute("SELECT subnet, status, scanned_ports FROM discovery_run").fetchone()
             # NULL, not False: an old run's port coverage is unknown, and
@@ -67,7 +68,7 @@ class TestHistoryMigration:
         _seed_previous_schema(db)
         _alembic(db, "upgrade", "head")
 
-        with sqlite3.connect(db) as conn:
+        with closing(sqlite3.connect(db)) as conn, conn:
             conn.execute(
                 "INSERT INTO discovery_observation (run_id, device_id, present, ip_address,"
                 " observed_at) VALUES (1, 1, 1, '10.0.0.5', '2026-10-01 00:00:00')"
@@ -79,7 +80,7 @@ class TestHistoryMigration:
 
         _alembic(db, "downgrade", PREVIOUS)
 
-        with sqlite3.connect(db) as conn:
+        with closing(sqlite3.connect(db)) as conn, conn:
             tables = _tables(conn)
             assert "discovery_observation" not in tables
             assert "change_event" not in tables
@@ -96,7 +97,7 @@ class TestHistoryMigration:
     def test_constraint_rejects_an_unknown_change_kind(self, tmp_path: Path) -> None:
         db = tmp_path / "constraint.db"
         _alembic(db, "upgrade", "head")
-        with sqlite3.connect(db) as conn, pytest.raises(sqlite3.IntegrityError):
+        with closing(sqlite3.connect(db)) as conn, conn, pytest.raises(sqlite3.IntegrityError):
             conn.execute(
                 "INSERT INTO change_event (created_at, kind) VALUES ('2026-10-01', 'free_text')"
             )

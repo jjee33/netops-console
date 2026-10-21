@@ -4,10 +4,18 @@ One helper so every call site writes the same shape, and so a new kind of
 change cannot be recorded without also being added to ``CHANGE_KINDS`` — the
 check constraint rejects anything else.
 
-The helper adds the row to the session and does not commit. Every caller is a
-route that commits its own change immediately afterwards, so the event and the
-change it describes land in the same transaction: there is no window in which
-one exists without the other.
+The helper adds the row to the session and does not commit; the calling route
+commits it. Where the route makes the change itself (device edits and removal,
+action and settings changes, credential deletion), the event and the change
+share one transaction. Where a service function commits the change first
+(credential creation and assignment, host key trust and revocation), the event
+follows in a second commit immediately after. A crash between the two would
+leave the change without its record. The window is a single statement, and it
+is stated here rather than claimed away.
+
+Every call happens only after the change succeeded. A request that fails
+validation renders an error, and the session dependency still commits at the
+end of the request, so recording first would log changes that never happened.
 """
 
 from __future__ import annotations

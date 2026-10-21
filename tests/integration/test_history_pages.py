@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 from sqlalchemy import select
@@ -259,3 +260,87 @@ class TestExplanationRendering:
         assert "nothing is listening on 22/tcp" in response.text
         assert "Likely causes" in response.text
         assert HOSTILE not in response.text
+
+
+class TestLongHistories:
+    """More records than one page of a source holds: the timeline must not
+    invent a first sighting, leave silent gaps, or under-count coverage."""
+
+    async def _device_with_observations(self, count: int) -> int:
+        from datetime import timedelta
+
+        from app.models import DiscoveryObservation
+
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        async with get_session_factory()() as session:
+            device = Device(ip_address="10.0.40.50", status="online", first_seen=start)
+            session.add(device)
+            await session.flush()
+            for index in range(count):
+                run = DiscoveryRun(
+                    subnet=str(NETWORK), status="success", scanned_ports=True,
+                    started_at=start + timedelta(hours=index),
+                )  # fmt: skip
+                session.add(run)
+                await session.flush()
+                session.add(
+                    DiscoveryObservation(
+                        run_id=run.id,
+                        device_id=device.id,
+                        present=True,
+                        ip_address="10.0.40.50",
+                        # One change late in the history, inside the window.
+                        hostname="renamed.lab" if index >= count - 3 else "old.lab",
+                        observed_at=start + timedelta(hours=index),
+                    )
+                )
+            await session.commit()
+            return device.id
+
+    async def test_no_false_first_sighting_beyond_the_window(self, migrated: Path) -> None:
+        from app.modules.history.service import SOURCE_LIMIT, device_timeline
+
+        device_id = await self._device_with_observations(SOURCE_LIMIT + 20)
+        async with get_session_factory()() as session:
+            device = await session.get(Device, device_id)
+            assert device
+            timeline = await device_timeline(session, device)
+
+        titles = [event.title for event in timeline.events]
+        assert not any(title.startswith("First recorded") for title in titles), titles
+        assert any(
+            "Hostname: old.lab → renamed.lab" in line for e in timeline.events for line in e.details
+        )
+        assert timeline.coverage.scans == SOURCE_LIMIT + 20
+        assert timeline.coverage.answered == SOURCE_LIMIT + 20
+        assert timeline.truncated
+
+    async def test_a_capped_source_cuts_the_timeline_instead_of_leaving_a_gap(
+        self, migrated: Path
+    ) -> None:
+        from datetime import timedelta
+
+        from app.models import DiagnosticResult
+        from app.modules.history.service import SOURCE_LIMIT, device_timeline
+
+        device_id = await self._device_with_observations(3)
+        start = datetime(2026, 6, 1, tzinfo=UTC)
+        async with get_session_factory()() as session:
+            for index in range(SOURCE_LIMIT + 10):
+                session.add(
+                    DiagnosticResult(
+                        device_id=device_id, type="ping", target="10.0.40.50",
+                        status="success", started_at=start + timedelta(minutes=index),
+                    )
+                )  # fmt: skip
+            await session.commit()
+            device = await session.get(Device, device_id)
+            assert device
+            timeline = await device_timeline(session, device)
+
+        oldest_shown_check = min(e.when for e in timeline.events if e.category == "diagnostic")
+        # Nothing older than the oldest shown check may appear: there are
+        # unshown checks in that period, so showing scans from it would imply
+        # a complete picture that is not there.
+        assert all(event.when >= oldest_shown_check for event in timeline.events)
+        assert timeline.truncated

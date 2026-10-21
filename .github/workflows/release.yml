@@ -285,8 +285,12 @@ jobs:
           output: trivy.sarif
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          # Without an explicit exit code, Trivy writes findings to SARIF but
+          # exits successfully: the release scan is otherwise a silent no-op.
+          exit-code: '1'
 
       - uses: github/codeql-action/upload-sarif@v3
+        if: ${{ always() && hashFiles('trivy.sarif') != '' }}
         with:
           sarif_file: trivy.sarif
           category: trivy-image

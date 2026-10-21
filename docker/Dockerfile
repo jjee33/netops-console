@@ -151,6 +151,13 @@ RUN groupadd --gid 10001 netops \
 
 COPY --from=builder /opt/venv /opt/venv
 
+# Runtime never installs packages. Both the base Python image and the copied
+# build venv contain pip's vendored dependencies (including its CycloneDX SBOM);
+# shipping those build tools unnecessarily expands the attack surface and can
+# report vulnerable vendored packages even when the app does not import them.
+RUN /opt/venv/bin/pip uninstall -y pip setuptools wheel \
+ && /usr/local/bin/python -m pip uninstall -y pip setuptools wheel
+
 WORKDIR /app
 COPY --chown=10001:10001 app ./app
 COPY --chown=10001:10001 migrations ./migrations

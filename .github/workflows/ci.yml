@@ -188,11 +188,7 @@ jobs:
 
       - name: Build tools and vendored libraries are absent at runtime
         run: |
-          docker run --rm --entrypoint python ${{ env.IMAGE }}:ci -c '
-            import importlib.util
-            for package in ("pip", "setuptools", "wheel", "msgpack", "urllib3"):
-                assert importlib.util.find_spec(package) is None, package
-          '
+          docker run --rm --entrypoint python ${{ env.IMAGE }}:ci -c 'import importlib.util; packages = ("pip", "setuptools", "wheel", "msgpack", "urllib3"); assert all(importlib.util.find_spec(p) is None for p in packages)'
 
       - name: Network tools work unprivileged with only NET_RAW
         run: |

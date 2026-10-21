@@ -172,6 +172,36 @@ class TestAssignment:
 
 
 class TestHostKeyTrust:
+    async def test_untrusted_fingerprint_cannot_forge_log_line(
+        self,
+        auth_client: httpx.AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from app.modules.ssh.client import PresentedKey
+
+        device_id = await _device()
+
+        async def fake_probe(device: Device) -> PresentedKey:
+            return PresentedKey("ssh-ed25519", "AAAA", "SHA256:actual")
+
+        monkeypatch.setattr(service, "probe", fake_probe)
+        token = await csrf_token(auth_client, f"/devices/{device_id}")
+        caplog.set_level("WARNING", logger="netops.credentials")
+        response = await auth_client.post(
+            f"/devices/{device_id}/hostkey/trust",
+            data={
+                "csrf_token": token,
+                "fingerprint": "SHA256:fake\nFORGED EVENT",
+                "key_type": "ssh-ed25519",
+                "key_base64": "AAAA",
+            },
+        )
+        assert response.status_code == 409
+        assert len(caplog.records) == 1
+        assert "\n" not in caplog.records[0].getMessage()
+        assert "FORGED EVENT" in caplog.records[0].getMessage()
+
     @pytest.mark.parametrize("ip", ["169.254.169.254", "127.0.0.1", "10.99.99.99"])
     async def test_probe_and_trust_refuse_out_of_scope_without_network_contact(
         self, auth_client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, ip: str

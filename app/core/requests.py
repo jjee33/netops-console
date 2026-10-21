@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_address
+
 from starlette.requests import Request
 
 
@@ -14,7 +16,15 @@ def client_ip(request: Request) -> str:
     doing so would trust it from any source, and uvicorn already applies the
     trusted-proxy check that makes it meaningful.
     """
-    return request.client.host if request.client else "unknown"
+    if request.client is None:
+        return "unknown"
+    try:
+        # A trusted proxy may forward a client address, but that doesn't make
+        # arbitrary text an IP. Keep forged control characters out of both
+        # logs and the per-address login throttle key.
+        return str(ip_address(request.client.host))
+    except ValueError:
+        return "unknown"
 
 
 def wants_partial(request: Request) -> bool:

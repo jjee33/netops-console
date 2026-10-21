@@ -247,7 +247,7 @@ async def trust_host_key(
         # The device is answering with something other than what was reviewed.
         # Refuse and show the new value rather than trusting either.
         logger.warning(
-            "host key changed between review and trust for device %s (%s -> %s)",
+            "host key changed between review and trust for device %s (%r -> %r)",
             device_id,
             fingerprint,
             presented.fingerprint,
